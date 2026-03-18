@@ -1,0 +1,5 @@
+# Copyright (c) 2025 Aaron Chan
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_HUNTER
+	select SOC_STM32F030X8

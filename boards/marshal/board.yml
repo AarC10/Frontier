@@ -1,0 +1,12 @@
+board:
+  name: marshal
+  full_name: Marshal Receiver
+  vendor: Wild West Rocketry
+  revision:
+    format: number
+    default: "1"
+    revisions:
+      - name: "1"
+      - name: "2"
+  socs:
+    - name: stm32f030x8
