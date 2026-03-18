@@ -2,6 +2,9 @@
 default:
     @just --list
 
+clean target:
+    rm -rf builds/{{target}}
+
 # Build outlaw gen3 firmware into builds/outlaw
 outlaw:
     west build -b outlaw_gen3 apps/outlaw -p auto --build-dir builds/outlaw

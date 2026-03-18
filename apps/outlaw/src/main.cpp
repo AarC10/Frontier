@@ -9,6 +9,7 @@
 #include <zephyr/drivers/gnss.h>
 #include <zephyr/drivers/lora.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/logging/log_ctrl.h>
 #include <core/time.h>
 #include <core/defs.h>
@@ -17,6 +18,7 @@
 #include "state_machine.h"
 #include <core/GnssReceiver.h>
 #include <core/Settings.h>
+#include <core/TdmaClock.h>
 
 LOG_MODULE_REGISTER(main);
 GNSS_DATA_CALLBACK_DEFINE(DEVICE_DT_GET(DT_ALIAS(gnss)), gnssCallback);
@@ -24,8 +26,13 @@ GNSS_DATA_CALLBACK_DEFINE(DEVICE_DT_GET(DT_ALIAS(gnss)), gnssCallback);
 int main() {
     static const gpio_dt_spec pps_spec = GPIO_DT_SPEC_GET(DT_ALIAS(pps), gpios);
     static const gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+    const device* tim2Dev = DEVICE_DT_GET(DT_ALIAS(tdma_timer));
     if (!device_is_ready(led.port)) {
         LOG_ERR("LED GPIO device not ready\n");
+    }
+
+    if (!device_is_ready(tim2Dev)) {
+        LOG_ERR("TDMA timer device not ready");
     }
 
     Settings::load();
@@ -42,6 +49,7 @@ int main() {
 #endif
 
     time_setup_pps(&pps_spec);
+    TdmaClock::instance().init(&pps_spec, tim2Dev);
 
     while (true) {
         const int ret = sm.run();

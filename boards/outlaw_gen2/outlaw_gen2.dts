@@ -52,6 +52,7 @@
 		led0 = &led;
 		watchdog0 = &iwdg;
 		die-temp0 = &die_temp;
+		tdma-timer = &tdma;
 	};
 };
 
@@ -161,5 +162,14 @@
 			label = "storage";
 			reg = <0x0001f800 DT_SIZE_K(2)>;
 		};
+	};
+};
+
+&timers2 {
+	status = "okay";
+	tdma: tdma {
+		compatible = "st,stm32-counter";
+		status = "okay";
+		label = "COUNTER_2";
 	};
 };
