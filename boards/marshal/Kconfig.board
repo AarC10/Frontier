@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_MARSHAL
+	bool "Marshal"
+	select SOC_STM32G474XX

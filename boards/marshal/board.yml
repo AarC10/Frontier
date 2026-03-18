@@ -1,6 +1,6 @@
 board:
   name: marshal
-  full_name: Marshal Receiver
+  full_name: Marshal
   vendor: Wild West Rocketry
   revision:
     format: number
@@ -9,4 +9,4 @@ board:
       - name: "1"
       - name: "2"
   socs:
-    - name: stm32f030x8
+    - name: stm32g474xx
