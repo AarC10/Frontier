@@ -30,7 +30,7 @@ hunter-433:
     west build -b hunter apps/hunter -p auto --build-dir builds/hunter-433 -- -DCONFIG_LICENSED_FREQUENCY=y
 
 marshal:
-    west build -b marshal apps/marshal -p auto --build-dir builds/marshal
+    west build -b marshal apps/marshal -p auto --build-dir builds/marshal -DZEPHYR_SCA_VARIANT=dtdoctor
 
 # Flash with ST-Link
 # Usage: just sflash outlaw | just sflash hunter
