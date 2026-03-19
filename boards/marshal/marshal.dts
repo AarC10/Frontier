@@ -1,7 +1,9 @@
 /dts-v1/;
 
 #include <st/g4/stm32g474Xe.dtsi>
-#include <st/g4/stm32g474r(b-c-e)tx-pinctrl.dtsi>
+#include <st/g4/stm32g474c(b-c-e)tx-pinctrl.dtsi>
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
 
 / {
 	model = "Marshal Flight Computer";
@@ -12,6 +14,55 @@
 		zephyr,shell-uart = &cdc_acm_uart0;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led_0 {
+			gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>;
+			label = "Status LED";
+		};
+	};
+
+	pyro: pyro {
+		stm_ch1_en: stm_ch1_en {
+			gpios = <&gpiob 3 GPIO_ACTIVE_HIGH>;
+			label = "STM-CH1-EN";
+		};
+
+		stm_ch2_en: stm_ch2_en {
+			gpios = <&gpiob 4 GPIO_ACTIVE_HIGH>;
+			label = "STM-CH2-EN";
+		};
+
+		flt1: flt1 {
+			gpios = <&gpiob 0 GPIO_ACTIVE_LOW>;
+			label = "FLT1";
+		};
+
+		flt2: flt2 {
+			gpios = <&gpiob 1 GPIO_ACTIVE_LOW>;
+			label = "FLT2";
+		};
+	};
+
+	buzzer_pwm: buzzer_pwm {
+		pwms = <&pwm4 4 PWM_HZ(2000) PWM_POLARITY_NORMAL>;
+	};
+
+	aliases {
+		led0 = &led0;
+		dbg-uart = &usart1;
+		stm-ch1-en = &stm_ch1_en;
+		stm-ch2-en = &stm_ch2_en;
+		flt1 = &flt1;
+		flt2 = &flt2;
+		pyro1-ilm = &pyro1_ilm;
+		pyro2-ilm = &pyro2_ilm;
+		vbat-sense = &vbat_sense;
+		v3v3-sense = &v3v3_sense;
+		buzzer-pwm = &buzzer_pwm;
 	};
 };
 
@@ -43,11 +94,8 @@
 };
 
 &ucpd1 {
-	psc-ucpdclk = <1>;
-	hbitclkdiv = <27>;
-	pinctrl-0 = <&ucpd1_cc1_pb6 &ucpd1_cc2_pb4>;
-	pinctrl-names = "default";
-	status = "okay";
+	/* Disabled: schematic-assigned PB6/PB4 are used by sensor IRQ/pyro enable. */
+	status = "disabled";
 };
 
 &spi1 {
@@ -106,6 +154,70 @@
 				reg = <0x00800000 DT_SIZE_M(64)>;
 			};
 		};
+	};
+};
+
+&usart1 {
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&timers4 {
+	status = "okay";
+
+	pwm4: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim4_ch4_pb9>;
+		pinctrl-names = "default";
+	};
+};
+
+&adc1 {
+	pinctrl-0 = <&adc1_in1_pa0 &adc1_in2_pa1 &adc1_in3_pa2 &adc1_in4_pa3>;
+	pinctrl-names = "default";
+	st,adc-clock-source = "SYNC";
+	st,adc-prescaler = <4>;
+	status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	vbat_sense: channel@1 {
+		reg = <1>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+		zephyr,vref-mv = <3300>;
+	};
+
+	v3v3_sense: channel@2 {
+		reg = <2>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+		zephyr,vref-mv = <3300>;
+	};
+
+	pyro1_ilm: channel@3 {
+		reg = <3>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+		zephyr,vref-mv = <3300>;
+	};
+
+	pyro2_ilm: channel@4 {
+		reg = <4>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+		zephyr,vref-mv = <3300>;
 	};
 };
 
