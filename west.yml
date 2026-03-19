@@ -19,6 +19,7 @@ manifest:
         name-allowlist:
           - cmsis
           - cmsis_6
+          - fatfs
           - hal_stm32
           - loramac-node
           - hal_st

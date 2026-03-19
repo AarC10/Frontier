@@ -53,6 +53,25 @@
 		pwms = <&pwm4 4 PWM_HZ(2000) PWM_POLARITY_NORMAL>;
 	};
 
+	flashdisk0: flashdisk0 {
+		compatible = "zephyr,flash-disk";
+		partition = <&fat_partition>;
+		disk-name = "marshal";
+		cache-size = <4096>;
+		status = "okay";
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		fatfs0: fatfs0 {
+			compatible = "zephyr,fstab,fatfs";
+			automount;
+			disk-access;
+			mount-point = "/export";
+		};
+	};
+
 	vbat_sensor: vbat_sensor {
 		compatible = "voltage-divider";
 		io-channels = <&adc1 1>;
@@ -83,6 +102,8 @@
 		buzzer-pwm = &buzzer_pwm;
 		vbat-sensor = &vbat_sensor;
 		vcc-sensor = &vcc_sensor;
+		fat-disk = &flashdisk0;
+		fatfs0 = &fatfs0;
 	};
 };
 
