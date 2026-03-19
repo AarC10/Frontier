@@ -1,7 +1,7 @@
 config CORE
   bool "Core"
   help
-    This option enables core functionality for tracker software
+    This option enables core functionality for flight software
 
 if CORE
 
