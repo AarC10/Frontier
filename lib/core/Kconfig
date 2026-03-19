@@ -3,26 +3,54 @@ config CORE
   help
     This option enables core functionality for tracker software
 
+if CORE
+
+config CORE_GNSS
+  bool "Core GNSS"
+  default y
+  help
+    Build GNSS receiver support in the core library.
+
+config CORE_SETTINGS
+  bool "Core Settings"
+  default y
+  help
+    Build settings storage/runtime configuration support in the core library.
+
+config CORE_LORA
+  bool "Core LoRa"
+  default y
+  help
+    Build LoRa transceiver support in the core library.
+
+config CORE_TDMA_TIME
+  bool "Core TDMA and Time"
+  default y
+  help
+    Build TDMA clock and PPS timekeeping support in the core library.
+
 config LICENSED_FREQUENCY
   bool "Licensed Frequency"
-  depends on CORE
+  depends on CORE_SETTINGS
   help
     This option enables callsigns prepended to each packet.
 
 config SHELL_FREQUENCY
   bool "Shell Frequency"
-  depends on CORE
+  depends on CORE_SETTINGS
   help
     This option enables a shell command to set the frequency at runtime.
 
 config SHELL_CALLSIGN
   bool "Shell Callsign"
-  depends on CORE
+  depends on CORE_SETTINGS
   help
     This option enables a shell command to set the callsign at runtime.
 
 config SHELL_NODE_ID
   bool "Shell Node ID"
-  depends on CORE
+  depends on CORE_SETTINGS
   help
     This option enables a shell command to set the node ID at runtime.
+
+endif # CORE

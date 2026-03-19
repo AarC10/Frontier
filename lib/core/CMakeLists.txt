@@ -1,4 +1,10 @@
 zephyr_library()
 
-FILE(GLOB sources *.c *.cpp)
-zephyr_library_sources(${sources})
+zephyr_library_sources_ifdef(CONFIG_CORE_GNSS GnssReceiver.cpp)
+
+zephyr_library_sources_ifdef(CONFIG_CORE_SETTINGS Settings.cpp)
+
+zephyr_library_sources_ifdef(CONFIG_CORE_LORA LoraTransceiver.cpp)
+
+zephyr_library_sources_ifdef(CONFIG_CORE_TDMA_TIME TdmaClock.cpp)
+zephyr_library_sources_ifdef(CONFIG_CORE_TDMA_TIME time.cpp)
