@@ -19,21 +19,21 @@ int Barometer::init() const {
 
 BaroSample Barometer::sample() {
 	if (dev == nullptr || !device_is_ready(dev)) {
-		lastError_ = -ENODEV;
+		lastError = -ENODEV;
 		return lastSample;
 	}
 
-	lastError_ = sensor_sample_fetch(dev);
-	if (lastError_ != 0) {
+	lastError = sensor_sample_fetch(dev);
+	if (lastError != 0) {
 		return lastSample;
 	}
 
-	lastError_ = sensor_channel_get(dev, SENSOR_CHAN_PRESS, &lastSample.pressure);
-	if (lastError_ != 0) {
+	lastError = sensor_channel_get(dev, SENSOR_CHAN_PRESS, &lastSample.pressure);
+	if (lastError != 0) {
 		return lastSample;
 	}
 
-	lastError_ = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &lastSample.temperature);
+	lastError = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &lastSample.temperature);
 	return lastSample;
 }
 
