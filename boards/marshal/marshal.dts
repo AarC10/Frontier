@@ -14,6 +14,8 @@
 		zephyr,shell-uart = &cdc_acm_uart0;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
+
+		zephyr,settings-partition = &nvs_partition;
 	};
 
 	leds {

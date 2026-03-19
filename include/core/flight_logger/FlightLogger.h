@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <core/flight/FlightLogRecords.h>
+#include <core/flight_logger/FlightLogRecords.h>
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 

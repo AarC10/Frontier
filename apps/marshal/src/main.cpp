@@ -17,6 +17,8 @@
 #include <core/flight_logger/FlightLogRecords.h>
 #include <core/flight_logger/FlightLogger.h>
 
+LOG_MODULE_REGISTER(main);
+
 static void onStateChange(FlightState oldState, FlightState newState)
 {
     LOG_INF("State: %d -> %d", static_cast<int>(oldState), static_cast<int>(newState));
