@@ -29,6 +29,19 @@ config CORE_TDMA_TIME
   help
     Build TDMA clock and PPS timekeeping support in the core library.
 
+config CORE_FLIGHT
+  bool "Core Flight State Machine"
+  default n
+  help
+    Build flight state machine for rocket state tracking and event detection.
+
+config CORE_SENSORS
+  bool "Core Sensor Abstractions"
+  default n
+  help
+    Build sensor abstractions for core sensors like barometers and IMUs.
+
+
 config LICENSED_FREQUENCY
   bool "Licensed Frequency"
   depends on CORE_SETTINGS

@@ -13,6 +13,7 @@
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
+#include <core/flight/FlightStateMachine.h>
 
 int main() {
     Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
