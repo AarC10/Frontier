@@ -94,7 +94,7 @@
 };
 
 &ucpd1 {
-	/* Disabled: schematic-assigned PB6/PB4 are used by sensor IRQ/pyro enable. */
+	// Disabled PB6/PB4 are used by sensor IRQ/pyro enable.
 	status = "disabled";
 };
 
@@ -133,8 +133,10 @@
 	w25q128jvsiq: spi-nor-flash@0 {
 		compatible = "jedec,spi-nor";
 		reg = <0>;
-		spi-max-frequency = <DT_FREQ_M(50)>;
+		spi-max-frequency = <DT_FREQ_M(104)>;
 		size = <DT_SIZE_M(128)>;
+        jedec-id = [ef 40 18];
+
 		wp-gpios = <&gpioa 15 GPIO_ACTIVE_LOW>;
 		reset-gpios = <&gpiob 10 GPIO_ACTIVE_LOW>;
 		status = "okay";
