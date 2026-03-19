@@ -15,7 +15,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(ms56xx);
 
-#if DT_HAS_COMPAT_ON_BUS_STATUS_OKAY(launch_ms5607, spi) || DT_HAS_COMPAT_ON_BUS_STATUS_OKAY(launch_ms5611, spi)
+#if DT_HAS_COMPAT_ON_BUS_STATUS_OKAY(te_ms5607, spi) || DT_HAS_COMPAT_ON_BUS_STATUS_OKAY(te_ms5611, spi)
 
 static int ms56xx_spi_raw_cmd(const struct ms56xx_config *config, uint8_t cmd)
 {

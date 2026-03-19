@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT_MS5607 launch_ms5607
-#define DT_DRV_COMPAT_MS5611 launch_ms5611
+#define DT_DRV_COMPAT_MS5607 te_ms5607
+#define DT_DRV_COMPAT_MS5611 te_ms5611
 
 #include "ms56xx.h"
 
