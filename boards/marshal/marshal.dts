@@ -67,6 +67,8 @@
 
 	aliases {
 		led0 = &led0;
+		barometer = &ms5611;
+		imu = &lsm6dsv16x;
 		dbg-uart = &usart1;
 		stm-ch1-en = &stm_ch1_en;
 		stm-ch2-en = &stm_ch2_en;
