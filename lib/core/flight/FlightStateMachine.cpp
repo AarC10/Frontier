@@ -26,7 +26,7 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
                 above2gActive = true;
                 above2gStartMs = now;
             }
-            if (elapsedMs(now, above2gStartMs) >= padBoostSustainedMillis) {
+            if (elapsedMs(now, above2gStartMs) >= padBoostSustainedMs) {
                 transitionTo(FlightState::BOOST, now);
                 boostEntryTimeMs = now;
                 above2gActive = false;
@@ -43,7 +43,7 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
         break;
 
     case FlightState::COAST: {
-        const bool inhibitApogee = elapsedMs(now, boostEntryTimeMs) < apogeeInhibitAfterBoostMillis;
+        const bool inhibitApogee = elapsedMs(now, boostEntryTimeMs) < apogeeInhibitAfterBoostMs;
         const bool accelCondition = accelG < coastApogeeAccelGs;
         const bool dualSensorApogee = accelCondition && pressureIncreasing;
         if (!inhibitApogee && dualSensorApogee) {
@@ -69,16 +69,16 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
             below01gActive = false;
         }
 
-        if (elapsedMs(now, descentAltitudeAnchorTimeMs) >= descentLandedAltitudeWindowMillis) {
+        if (elapsedMs(now, descentAltitudeAnchorTimeMs) >= descentLandedAltitudeWindowMs) {
             descentAltitudeAnchorTimeMs = now;
             descentAltitudeAnchorM = currentAltitudeM;
         }
 
         const float altitudeDeltaM = std::fabs(currentAltitudeM - descentAltitudeAnchorM);
         const bool accelStable = below01gActive &&
-                                 (elapsedMs(now, below01gStartMs) >= descentLandedAccelSustainMillis);
+                                 (elapsedMs(now, below01gStartMs) >= descentLandedAccelSustainMs);
         const bool altitudeStable = elapsedMs(now, descentAltitudeAnchorTimeMs) >=
-                                        descentLandedAltitudeWindowMillis &&
+                                        descentLandedAltitudeWindowMs &&
                                     altitudeDeltaM < descentLandedAltitudeDeltaM;
 
         if (accelStable && altitudeStable) {

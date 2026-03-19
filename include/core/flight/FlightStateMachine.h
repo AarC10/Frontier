@@ -29,16 +29,16 @@ public:
 
 private:
 	static constexpr float padBoostAccelGs = 2.0f;
-	static constexpr uint32_t padBoostSustainedMillis = 50U;
+	static constexpr uint32_t padBoostSustainedMs = 50U;
 
 	static constexpr float boostCoastAccelGs = 1.5f;
 
 	static constexpr float coastApogeeAccelGs = 1.0f;
-	static constexpr uint32_t apogeeInhibitAfterBoostMillis = 1000U;
+	static constexpr uint32_t apogeeInhibitAfterBoostMs = 1000U;
 
 	static constexpr float descentLandedAccelGs = 0.1f;
-	static constexpr uint32_t descentLandedAccelSustainMillis = 3000U;
-	static constexpr uint32_t descentLandedAltitudeWindowMillis = 5000U;
+	static constexpr uint32_t descentLandedAccelSustainMs = 3000U;
+	static constexpr uint32_t descentLandedAltitudeWindowMs = 5000U;
 	static constexpr float descentLandedAltitudeDeltaM = 1.0f;
 
 	Barometer &barometer;
