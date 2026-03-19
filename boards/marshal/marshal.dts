@@ -164,14 +164,22 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			storage_partition: partition@0 {
-				label = "storage";
-				reg = <0x00000000 DT_SIZE_M(64)>;
+			// 16 KB for configs
+			nvs_partition: partition@0 {
+				label = "nvs_storage";
+				reg = <0x00000000 0x4000>;
 			};
 
-			logging_partition: partition@800000 {
-				label = "logging";
-				reg = <0x00800000 DT_SIZE_M(64)>;
+			// 12 MB for flight critical logging
+			raw_partition: partition@4000 {
+				label = "raw_log";
+				reg = <0x00004000 0xBFC000>;
+			};
+
+			// 4 MB for exporting over FAT
+			fat_partition: partition@C00000 {
+				label = "fat_export";
+				reg = <0x00C00000 0x400000>;
 			};
 		};
 	};
