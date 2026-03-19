@@ -9,7 +9,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log_ctrl.h>
 
-#include <core/Settings.h>
+#include <core/Settings.h>c
 
 int main() {
     return 0;
