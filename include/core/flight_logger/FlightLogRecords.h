@@ -48,10 +48,10 @@ struct __attribute__((packed)) FlightHeaderRecord {
 	uint16_t imuRateHz;
 	uint16_t baroRateHz;
 	uint8_t  formatVersion;
-	uint8_t  reserved[13];
+	uint8_t  reserved[15]; // Force struct to be 32 bytes to pack evenly into 256 byte page. 8 records per page
 };
 
-static_assert(sizeof(FlightHeaderRecord) == 30, "FlightHeaderRecord must be 30 bytes");
+static_assert(sizeof(FlightHeaderRecord) == 32, "FlightHeaderRecord must be 32 bytes");
 
 struct __attribute__((packed)) ImuRecord {
 	RecordHeader hdr;
