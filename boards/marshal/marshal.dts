@@ -51,6 +51,20 @@
 		pwms = <&pwm4 4 PWM_HZ(2000) PWM_POLARITY_NORMAL>;
 	};
 
+	vbat_sensor: vbat_sensor {
+		compatible = "voltage-divider";
+		io-channels = <&adc1 1>;
+		output-ohms = <22000>;
+		full-ohms = <222000>;
+	};
+
+	vcc_sensor: vcc_sensor {
+		compatible = "voltage-divider";
+		io-channels = <&adc1 2>;
+		output-ohms = <68000>;
+		full-ohms = <168000>;
+	};
+
 	aliases {
 		led0 = &led0;
 		dbg-uart = &usart1;
@@ -63,6 +77,8 @@
 		vbat-sense = &vbat_sense;
 		v3v3-sense = &v3v3_sense;
 		buzzer-pwm = &buzzer_pwm;
+		vbat-sensor = &vbat_sensor;
+		vcc-sensor = &vcc_sensor;
 	};
 };
 
