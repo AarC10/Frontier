@@ -7,25 +7,25 @@ if CORE
 
 config CORE_GNSS
   bool "Core GNSS"
-  default y
+  default n
   help
     Build GNSS receiver support in the core library.
 
 config CORE_SETTINGS
   bool "Core Settings"
-  default y
+  default n
   help
     Build settings storage/runtime configuration support in the core library.
 
 config CORE_LORA
   bool "Core LoRa"
-  default y
+  default n
   help
     Build LoRa transceiver support in the core library.
 
 config CORE_TDMA_TIME
   bool "Core TDMA and Time"
-  default y
+  default n
   help
     Build TDMA clock and PPS timekeeping support in the core library.
 
