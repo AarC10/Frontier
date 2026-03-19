@@ -1,3 +1,5 @@
+/dts-v1/;
+
 #include <st/g4/stm32g474Xe.dtsi>
 #include <st/g4/stm32g474r(b-c-e)tx-pinctrl.dtsi>
 
@@ -46,6 +48,65 @@
 	pinctrl-0 = <&ucpd1_cc1_pb6 &ucpd1_cc2_pb4>;
 	pinctrl-names = "default";
 	status = "okay";
+};
+
+&spi1 {
+	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa7>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpiob 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>,
+		   <&gpioa 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	status = "okay";
+
+	ms5611: ms5611@0 {
+		compatible = "meas,ms5607";
+		reg = <0>;
+		spi-max-frequency = <DT_FREQ_M(10)>;
+		status = "okay";
+	};
+
+	lsm6dsv16x: lsm6dsv16x@1 {
+		compatible = "st,lsm6dsv16x";
+		reg = <1>;
+		spi-max-frequency = <DT_FREQ_M(10)>;
+		drdy-pin = <1>;
+		drdy-pulsed;
+		int1-gpios = <&gpiob 6 GPIO_ACTIVE_HIGH>;
+		int2-gpios = <&gpiob 7 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+};
+
+&spi2 {
+	pinctrl-0 = <&spi2_sck_pb13 &spi2_miso_pb14 &spi2_mosi_pb15>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpiob 12 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	status = "okay";
+
+	w25q128jvsiq: spi-nor-flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <DT_FREQ_M(50)>;
+		size = <DT_SIZE_M(128)>;
+		wp-gpios = <&gpioa 15 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpiob 10 GPIO_ACTIVE_LOW>;
+		status = "okay";
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			storage_partition: partition@0 {
+				label = "storage";
+				reg = <0x00000000 DT_SIZE_M(64)>;
+			};
+
+			logging_partition: partition@800000 {
+				label = "logging";
+				reg = <0x00800000 DT_SIZE_M(64)>;
+			};
+		};
+	};
 };
 
 zephyr_udc0: &usb {
