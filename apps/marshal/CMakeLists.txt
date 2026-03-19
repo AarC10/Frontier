@@ -4,4 +4,4 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(app LANGUAGES C)
 
 target_include_directories(app PRIVATE include)
-target_sources(app PRIVATE src/main.cpp src/state_machine.cpp)
+target_sources(app PRIVATE src/main.cpp)
