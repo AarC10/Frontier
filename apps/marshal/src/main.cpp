@@ -12,9 +12,11 @@
 #include <core/Settings.h>
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
+#include <core/sensors/VoltageMonitor.h>
 
 int main() {
     Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
     Imu imu(DEVICE_DT_GET(DT_ALIAS(imu)));
+    VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVICE_DT_GET(DT_ALIAS(vcc_sensor)));
     return 0;
 }

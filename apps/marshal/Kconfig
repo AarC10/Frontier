@@ -13,3 +13,14 @@ endmenu
 module = APP
 module-str = APP
 source "subsys/logging/Kconfig.template.log_config"
+
+menu "Marshal"
+
+config VBAT_MIN_MV
+	int "Minimum VBAT voltage (mV)"
+	default 3300
+	range 2500 16000
+	help
+		Minimum battery voltage threshold, in millivolts, used by VoltageMonitor::isVbatOk().
+
+endmenu
