@@ -15,10 +15,20 @@
 #include <core/sensors/VoltageMonitor.h>
 #include <core/flight/FlightStateMachine.h>
 #include <core/flight_logger/FlightLogRecords.h>
+#include <core/flight_logger/FlightLogger.h>
+
+static void onStateChange(FlightState oldState, FlightState newState)
+{
+    LOG_INF("State: %d -> %d", static_cast<int>(oldState), static_cast<int>(newState));
+}
 
 int main() {
     Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
     Imu imu(DEVICE_DT_GET(DT_ALIAS(imu)));
     VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVICE_DT_GET(DT_ALIAS(vcc_sensor)));
+
+    static FlightStateMachine fsm(barometer, imu);
+    fsm.onStateChange(onStateChange);
+
     return 0;
 }

@@ -35,6 +35,13 @@ config CORE_FLIGHT
   help
     Build flight state machine for rocket state tracking and event detection.
 
+
+config CORE_FLIGHT_LOGGER
+  bool "Core Flight Logging"
+  default n
+  help
+    Build flight logging support for logging flight data to flash storage.
+
 config CORE_SENSORS
   bool "Core Sensor Abstractions"
   default n
