@@ -112,3 +112,26 @@ float FlightStateMachine::accelMagnitudeG(const ImuSample &sample) {
     const double magnitude = std::sqrt(ax * ax + ay * ay + az * az);
     return static_cast<float>(magnitude);
 }
+
+float FlightStateMachine::pressureKPaToAltitudeM(float pressureKPa) {
+    return 44330.0f * (1.0f - std::pow(pressureKPa / 101.325f, 1.0f / 5.255f));
+}
+
+float FlightStateMachine::pressureKPa(const BaroSample &sample) {
+    return sensor_value_to_float(&sample.pressure) / 1000.0f;
+}
+
+uint32_t FlightStateMachine::elapsedMs(uint32_t now, uint32_t then) {
+    return now - then;
+}
+
+void FlightStateMachine::transitionTo(FlightState next, uint32_t nowMs) {
+    if (state != next) {
+        const FlightState oldState = state;
+        state = next;
+        stateEntryTimeMs = nowMs;
+        if (stateChangeCallback) {
+            stateChangeCallback(oldState, next);
+        }
+    }
+}
