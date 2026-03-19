@@ -7,4 +7,4 @@ description: |
 
 compatible: "te,ms5607"
 
-include: ["spi-device.yaml", "launch,ms56xx-common.yaml"]
+include: ["spi-device.yaml", "te,ms56xx-common.yaml"]

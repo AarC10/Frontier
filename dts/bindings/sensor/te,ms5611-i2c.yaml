@@ -7,4 +7,4 @@ description: |
 
 compatible: "te,ms5611"
 
-include: ["i2c-device.yaml", "launch,ms56xx-common.yaml"]
+include: ["i2c-device.yaml", "te,ms56xx-common.yaml"]
