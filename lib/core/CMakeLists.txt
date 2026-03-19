@@ -8,3 +8,5 @@ zephyr_library_sources_ifdef(CONFIG_CORE_LORA LoraTransceiver.cpp)
 
 zephyr_library_sources_ifdef(CONFIG_CORE_TDMA_TIME TdmaClock.cpp)
 zephyr_library_sources_ifdef(CONFIG_CORE_TDMA_TIME time.cpp)
+
+add_subdirectory(sensors)
