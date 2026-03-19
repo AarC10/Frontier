@@ -86,7 +86,7 @@ public:
 private:
 	// Flash access
 	uint8_t partId;
-	const flash_area *fa{nullptr};
+	const flash_area *flashArea{nullptr};
 	uint32_t partSize{0};
 	uint32_t writePtr{0};
 
@@ -98,14 +98,14 @@ private:
 
 	// Page buffer
 	static constexpr size_t PAGE_SIZE = 256;
-	uint8_t pageBuffer[PAGE_SIZE];
+	uint8_t pageBuffer[PAGE_SIZE]{};
 	size_t pageOffset{0};
 
 	// Message Queue
 	// Depth: 100 Hz IMU + 25 Hz baro = 125 rec/s. 3 ms flash stall queues <1 record. 64 entries gives healthy margin.
 	static constexpr size_t MSGQ_DEPTH = 64;
-	char msgqBuffer[MSGQ_DEPTH * FlightLog::MAX_RECORD_SIZE];
-	k_msgq msgq;
+	char msgqBuffer[MSGQ_DEPTH * FlightLog::MAX_RECORD_SIZE]{};
+	k_msgq msgq{};
 
 	// Stats
 	std::atomic<uint32_t> dropped{0};
