@@ -106,7 +106,7 @@
 	status = "okay";
 
 	ms5611: ms5611@0 {
-		compatible = "meas,ms5607";
+		compatible = "te,ms5611";
 		reg = <0>;
 		spi-max-frequency = <DT_FREQ_M(10)>;
 		status = "okay";
