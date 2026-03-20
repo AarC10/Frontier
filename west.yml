@@ -23,3 +23,4 @@ manifest:
           - hal_stm32
           - loramac-node
           - hal_st
+          - mbedtls
