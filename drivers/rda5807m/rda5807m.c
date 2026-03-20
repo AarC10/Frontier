@@ -34,7 +34,7 @@ struct rda5807m_config {
 
 struct rda5807m_data {
     uint16_t shadow[RDA5807M_SHADOW_COUNT]; /* Big-endian shadow of regs 0x02–0x07 */
-    uint16_t frequency_khz;
+    uint32_t frequency_khz;
     struct k_mutex lock;
 };
 
@@ -97,7 +97,7 @@ static int rda5807m_wait_stc(const struct device *dev, uint32_t timeout_ms,
     return -ETIMEDOUT;
 }
 
-int rda5807m_set_frequency(const struct device *dev, uint16_t freq_khz) {
+int rda5807m_set_frequency(const struct device *dev, uint32_t freq_khz) {
     struct rda5807m_data *data = dev->data;
     int ret = 0;
 

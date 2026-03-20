@@ -102,7 +102,7 @@ struct rda5807m_status {
  * @param freq_khz Frequency in kHz (87000–108000, 100kHz steps)
  * @return 0 on success, -EINVAL for out-of-range, -ETIMEDOUT if STC never asserts
  */
-int rda5807m_set_frequency(const struct device *dev, uint16_t freq_khz);
+int rda5807m_set_frequency(const struct device *dev, uint32_t freq_khz);
 
 /**
  * @brief Set output volume.
