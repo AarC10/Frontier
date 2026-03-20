@@ -32,6 +32,9 @@ hunter-433:
 marshal:
     west build -b marshal apps/marshal -p auto --build-dir builds/marshal -DZEPHYR_SCA_VARIANT=dtdoctor
 
+fm-radio:
+    west build -b nucleo_wb55rg apps/fm_radio -p auto --build-dir builds/fm_radio -DZEPHYR_SCA_VARIANT=dtdoctor
+
 # Flash with ST-Link
 # Usage: just sflash outlaw | just sflash hunter
 sflash target:
