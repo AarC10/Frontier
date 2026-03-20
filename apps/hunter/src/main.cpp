@@ -3,20 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/logging/log_ctrl.h>
-
 #include "core/LoraTransceiver.h"
 #include "core/Settings.h"
 
+#include <zephyr/device.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>
 
 LOG_MODULE_REGISTER(main);
 
 int main(void) {
     // Settings::load();
-    // float freqMHz = static_cast<float>(OutlawSettings::getFrequency()) / 1'000'000;
+    // float freqMHz = static_cast<float>(OutlawSettings::getFrequency()) /
+    // 1'000'000;
 #ifdef CONFIG_LICENSED_FREQUENCY
     float freqMhz = 435.0f;
 #else

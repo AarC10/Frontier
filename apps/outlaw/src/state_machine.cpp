@@ -16,14 +16,15 @@ LOG_MODULE_REGISTER(state_machine);
 static const gpio_dt_spec dip0 = GPIO_DT_SPEC_GET(DT_ALIAS(dip0), gpios);
 static const gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 
-static void txTimerCallback(struct k_timer* timer) {
-    if (auto* sm = static_cast<StateMachine*>(k_timer_user_data_get(timer))) {
+static void txTimerCallback(struct k_timer *timer) {
+    if (auto *sm = static_cast<StateMachine *>(k_timer_user_data_get(timer))) {
         sm->handleTxTimer();
     }
 }
 
 #ifdef CONFIG_LICENSED_FREQUENCY
-StateMachine::StateMachine(uint8_t nodeId, const float frequencyMHz, const char* callsign) :  callsign(callsign), lora(nodeId, frequencyMHz), nodeId(nodeId) {
+StateMachine::StateMachine(uint8_t nodeId, const float frequencyMHz, const char *callsign)
+    : callsign(callsign), lora(nodeId, frequencyMHz), nodeId(nodeId) {
     k_timer_init(&txTimer, txTimerCallback, nullptr);
     k_timer_user_data_set(&txTimer, this);
     lora.setCallsign(callsign);
@@ -41,7 +42,8 @@ StateMachine::StateMachine(uint8_t nodeId, const float frequencyMHz, const char*
 
 #else
 
-StateMachine::StateMachine(const uint8_t nodeId, const float frequencyMhz) :  lora(nodeId, frequencyMhz), nodeId(nodeId) {
+StateMachine::StateMachine(const uint8_t nodeId, const float frequencyMhz)
+    : lora(nodeId, frequencyMhz), nodeId(nodeId) {
     k_timer_init(&txTimer, txTimerCallback, nullptr);
     k_timer_user_data_set(&txTimer, this);
 
@@ -58,7 +60,6 @@ StateMachine::StateMachine(const uint8_t nodeId, const float frequencyMhz) :  lo
 
 #endif
 
-
 void StateMachine::handleTxTimer() {
     if (gnssReceiver.isFixAcquired()) {
         lora.txGnssPayload(gnssReceiver.getLatestData());
@@ -67,9 +68,7 @@ void StateMachine::handleTxTimer() {
     }
 }
 
-int StateMachine::run() {
-    return checkForTransition();
-}
+int StateMachine::run() { return checkForTransition(); }
 
 void StateMachine::enterTransmitter() {
     LOG_INF("Entering transmitter state");
@@ -87,9 +86,7 @@ void StateMachine::enterReceiver() {
     lora.awaitRxPacket();
 }
 
-void StateMachine::exitReceiver() {
-    lora.awaitCancel();
-}
+void StateMachine::exitReceiver() { lora.awaitCancel(); }
 
 void StateMachine::transitionTo(State target) {
     if (target == currentState) {

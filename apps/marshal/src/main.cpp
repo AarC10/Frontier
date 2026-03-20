@@ -3,24 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/logging/log_ctrl.h>
-
 #include <core/Settings.h>
-#include <core/sensors/Barometer.h>
-#include <core/sensors/Imu.h>
-#include <core/sensors/VoltageMonitor.h>
 #include <core/flight/FlightStateMachine.h>
 #include <core/flight_logger/FlightLogRecords.h>
 #include <core/flight_logger/FlightLogger.h>
+#include <core/sensors/Barometer.h>
+#include <core/sensors/Imu.h>
+#include <core/sensors/VoltageMonitor.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>
 
 LOG_MODULE_REGISTER(main);
 
-static void onStateChange(FlightState oldState, FlightState newState)
-{
+static void onStateChange(FlightState oldState, FlightState newState) {
     LOG_INF("State: %d -> %d", static_cast<int>(oldState), static_cast<int>(newState));
 }
 

@@ -1,13 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-#include <zephyr/kernel.h>
-
 #include "core/GnssReceiver.h"
 #include "core/LoraTransceiver.h"
 
+#include <stdint.h>
+#include <zephyr/kernel.h>
+
 class StateMachine {
-public:
+  public:
 #ifdef CONFIG_LICENSED_FREQUENCY
     explicit StateMachine(uint8_t nodeId, const float frequencyMHz = 903.0, const char callsign[6] = "");
 #else
@@ -17,7 +17,7 @@ public:
 
     int run();
 
-private:
+  private:
     enum class State { Transmitter, Receiver };
 
     void enterTransmitter();
@@ -27,7 +27,7 @@ private:
     int checkForTransition();
 
 #ifdef CONFIG_LICENSED_FREQUENCY
-    const char* callsign;
+    const char *callsign;
 #endif
     LoraTransceiver lora;
     GnssReceiver gnssReceiver;
