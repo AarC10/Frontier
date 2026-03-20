@@ -6,3 +6,11 @@ menuconfig RDA5807M
 	default n
 	help
 	  Enable driver for the RDA5807M FM radio receiver.
+
+if RDA5807M
+
+module = RDA5807M
+module-str = rda5807m
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # RDA5807M
