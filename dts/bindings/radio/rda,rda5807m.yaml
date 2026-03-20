@@ -1,0 +1,23 @@
+description: RDA5807M FM Radio Receiver
+
+compatible: "rda,rda5807m"
+
+include: [base.yaml, i2c-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  vol-default:
+    type: int
+    default: 8
+    description: Initial volume (0-15)
+
+  band:
+    type: string
+    default: "87-108"
+    enum:
+      - "87-108"
+      - "76-91"
+      - "76-108"
+    description: FM band selection
