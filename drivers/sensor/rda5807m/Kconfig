@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Aaron Chan
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig RDA5807M
+	bool "RDA5807M FM Radio Receiver"
+	default n
+	help
+	  Enable driver for the RDA5807M FM radio receiver.
