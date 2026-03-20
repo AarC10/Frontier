@@ -1,0 +1,7 @@
+sample:
+  description: FM Radio Receiver
+  name: fm-radio
+common:
+  build_only: true
+  integration_platforms:
+    - nucleo_wb55rg
