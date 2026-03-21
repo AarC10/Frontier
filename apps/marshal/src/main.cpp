@@ -6,6 +6,7 @@
 #include <core/Settings.h>
 #include <core/flight/FlightStateMachine.h>
 #include <core/flight_logger/FlightLogger.h>
+#include <core/flight_logger/FlightExporter.h>
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>

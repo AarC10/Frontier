@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <core/flight/FlightLogRecords.h>
+#include <core/flight_logger/FlightLogger.h>
 
 #include <cstdint>
 
