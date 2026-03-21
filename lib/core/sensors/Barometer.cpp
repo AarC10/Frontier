@@ -48,5 +48,5 @@ float Barometer::altitudeMeters(float referencePressurePa) const {
     }
 
     // ISA pressure altitude approximation.
-    return static_cast<float>(44330.0 * (1.0 - std::pow(pressurePa / referencePressurePa, 0.19029495718)));
+    return static_cast<float>(44330.0 * (1.0 - std::pow(pressurePa / static_cast<double>(referencePressurePa), 0.19029495718)));
 }
