@@ -15,18 +15,18 @@ extern "C" {
 /* Register Addresses */
 
 /* Sequential write mode (I2C addr 0x10) starts at 0x02 */
-#define RDA5807M_REG_CONFIG     0x02
-#define RDA5807M_REG_CHANNEL    0x03
-#define RDA5807M_REG_GPIO       0x04
-#define RDA5807M_REG_VOLUME     0x05
-#define RDA5807M_REG_OPEN       0x06
-#define RDA5807M_REG_BLEND      0x07
+#define RDA5807M_REG_CONFIG  0x02
+#define RDA5807M_REG_CHANNEL 0x03
+#define RDA5807M_REG_GPIO    0x04
+#define RDA5807M_REG_VOLUME  0x05
+#define RDA5807M_REG_OPEN    0x06
+#define RDA5807M_REG_BLEND   0x07
 
 /* Sequential read mode (I2C addr 0x10) starts at 0x0A */
-#define RDA5807M_REG_STATUS_A   0x0A
-#define RDA5807M_REG_STATUS_B   0x0B
-#define RDA5807M_REG_STATUS_C   0x0C
-#define RDA5807M_REG_STATUS_D   0x0D
+#define RDA5807M_REG_STATUS_A 0x0A
+#define RDA5807M_REG_STATUS_B 0x0B
+#define RDA5807M_REG_STATUS_C 0x0C
+#define RDA5807M_REG_STATUS_D 0x0D
 
 /* REG 0x02 — Config */
 
@@ -47,57 +47,56 @@ extern "C" {
 #define RDA5807M_CFG_DHIZ           BIT(15)
 
 /* REG 0x03 — Channel */
-#define RDA5807M_CHAN_SPACE_100K    (0x0 << 0)
-#define RDA5807M_CHAN_SPACE_200K    (0x1 << 0)
-#define RDA5807M_CHAN_SPACE_50K     (0x2 << 0)
-#define RDA5807M_CHAN_SPACE_25K     (0x3 << 0)
-#define RDA5807M_CHAN_BAND_87108    (0x0 << 2)
-#define RDA5807M_CHAN_BAND_7691     (0x1 << 2)
-#define RDA5807M_CHAN_BAND_76108    (0x2 << 2)
-#define RDA5807M_CHAN_TUNE          BIT(4)
-#define RDA5807M_CHAN_DIRECT        BIT(5)  /* Direct mode */
-#define RDA5807M_CHAN_SHIFT         6       /* Channel bits [15:6] */
-#define RDA5807M_CHAN_MASK          (0x3FF << RDA5807M_CHAN_SHIFT)
+#define RDA5807M_CHAN_SPACE_100K (0x0 << 0)
+#define RDA5807M_CHAN_SPACE_200K (0x1 << 0)
+#define RDA5807M_CHAN_SPACE_50K  (0x2 << 0)
+#define RDA5807M_CHAN_SPACE_25K  (0x3 << 0)
+#define RDA5807M_CHAN_BAND_87108 (0x0 << 2)
+#define RDA5807M_CHAN_BAND_7691  (0x1 << 2)
+#define RDA5807M_CHAN_BAND_76108 (0x2 << 2)
+#define RDA5807M_CHAN_TUNE       BIT(4)
+#define RDA5807M_CHAN_DIRECT     BIT(5) /* Direct mode */
+#define RDA5807M_CHAN_SHIFT      6      /* Channel bits [15:6] */
+#define RDA5807M_CHAN_MASK       (0x3FF << RDA5807M_CHAN_SHIFT)
 
 /* REG 0x05 — Volume */
 
-#define RDA5807M_VOL_MASK           0x000F
-#define RDA5807M_VOL_MAX            15
-#define RDA5807M_SEEKTH_SHIFT       8
-#define RDA5807M_SEEKTH_MASK        (0x0F << RDA5807M_SEEKTH_SHIFT)
-#define RDA5807M_SEEKTH_DEFAULT     2
+#define RDA5807M_VOL_MASK       0x000F
+#define RDA5807M_VOL_MAX        15
+#define RDA5807M_SEEKTH_SHIFT   8
+#define RDA5807M_SEEKTH_MASK    (0x0F << RDA5807M_SEEKTH_SHIFT)
+#define RDA5807M_SEEKTH_DEFAULT 2
 
 /* REG 0x0A — Read Status A */
 
-#define RDA5807M_ST_RDSR            BIT(15) /* RDS ready */
-#define RDA5807M_ST_STC             BIT(14) /* Seek/tune complete */
-#define RDA5807M_ST_SF              BIT(13) /* Seek fail */
-#define RDA5807M_ST_RDSS            BIT(12) /* RDS sync */
-#define RDA5807M_ST_BLKE            BIT(11) /* RDS block E */
-#define RDA5807M_ST_STEREO          BIT(10) /* Stereo indicator */
-#define RDA5807M_ST_READCHAN_SHIFT  0
-#define RDA5807M_ST_READCHAN_MASK   0x03FF  /* Currently tuned channel */
+#define RDA5807M_ST_RDSR           BIT(15) /* RDS ready */
+#define RDA5807M_ST_STC            BIT(14) /* Seek/tune complete */
+#define RDA5807M_ST_SF             BIT(13) /* Seek fail */
+#define RDA5807M_ST_RDSS           BIT(12) /* RDS sync */
+#define RDA5807M_ST_BLKE           BIT(11) /* RDS block E */
+#define RDA5807M_ST_STEREO         BIT(10) /* Stereo indicator */
+#define RDA5807M_ST_READCHAN_SHIFT 0
+#define RDA5807M_ST_READCHAN_MASK  0x03FF /* Currently tuned channel */
 
 /* REG 0x0B — Read Status B */
-#define RDA5807M_ST_RSSI_SHIFT      9
-#define RDA5807M_ST_RSSI_MASK       (0x7F << RDA5807M_ST_RSSI_SHIFT)
-#define RDA5807M_ST_FM_TRUE         BIT(8)  /* 1=station, 0=noise */
-#define RDA5807M_ST_FM_READY        BIT(7)
+#define RDA5807M_ST_RSSI_SHIFT 9
+#define RDA5807M_ST_RSSI_MASK  (0x7F << RDA5807M_ST_RSSI_SHIFT)
+#define RDA5807M_ST_FM_TRUE    BIT(8) /* 1=station, 0=noise */
+#define RDA5807M_ST_FM_READY   BIT(7)
 
 /* Frequency limits (kHz) */
 
-#define RDA5807M_FREQ_MIN_KHZ       87000U
-#define RDA5807M_FREQ_MAX_KHZ       108000U
-#define RDA5807M_FREQ_STEP_KHZ      100U
-#define RDA5807M_FREQ_BASE_KHZ      87000U  /* Band base for channel calc */
-
+#define RDA5807M_FREQ_MIN_KHZ  87000U
+#define RDA5807M_FREQ_MAX_KHZ  108000U
+#define RDA5807M_FREQ_STEP_KHZ 100U
+#define RDA5807M_FREQ_BASE_KHZ 87000U /* Band base for channel calc */
 
 struct rda5807m_status {
     uint32_t frequency_khz;
-    uint8_t  rssi;          /* 0–127 */
-    bool     stereo;
-    bool     station;       /* FM_TRUE bit — tuned to actual station */
-    bool     seek_fail;
+    uint8_t rssi; /* 0–127 */
+    bool stereo;
+    bool station; /* FM_TRUE bit — tuned to actual station */
+    bool seek_fail;
 };
 
 /**

@@ -1,17 +1,15 @@
 #include "core/GnssReceiver.h"
 
+#include "zephyr/logging/log.h"
+
 #include <atomic>
 #include <cstring>
-
-#include "zephyr/logging/log.h"
 
 LOG_MODULE_REGISTER(GnssReciever);
 
 static GnssReceiver* receiver = nullptr;
 
-void setGnssReciever(GnssReceiver* rec) {
-    receiver = rec;
-}
+void setGnssReciever(GnssReceiver* rec) { receiver = rec; }
 
 void gnssCallback(const device* dev, const gnss_data* data) {
     if (!data) {
@@ -25,9 +23,7 @@ void gnssCallback(const device* dev, const gnss_data* data) {
 
     receiver->callback(*data);
 }
-GnssReceiver::GnssReceiver() {
-
-}
+GnssReceiver::GnssReceiver() {}
 
 void GnssReceiver::callback(const gnss_data& data) {
     std::memcpy(&latestData, &data, sizeof(gnss_data));

@@ -9,7 +9,9 @@ zephyr_library_sources_ifdef(CONFIG_CORE_LORA LoraTransceiver.cpp)
 zephyr_library_sources_ifdef(CONFIG_CORE_TDMA_TIME TdmaClock.cpp)
 zephyr_library_sources_ifdef(CONFIG_CORE_TDMA_TIME time.cpp)
 
-add_subdirectory_ifdef(CONFIG_CORE_SENSORS sensors)
-
 add_subdirectory_ifdef(CONFIG_CORE_FLIGHT flight)
 add_subdirectory_ifdef(CONFIG_CORE_FLIGHT_LOGGER flight_logger)
+
+add_subdirectory_ifdef(CONFIG_CORE_SENSORS sensors)
+
+add_subdirectory_ifdef(CONFIG_CORE_SETTINGS settings)

@@ -7,8 +7,8 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <zephyr/settings/settings.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/settings/settings.h>
 
 #ifdef CONFIG_SHELL
 #include <zephyr/shell/shell.h>
@@ -24,8 +24,7 @@ static char CONFIGURED_CALLSIGN[Settings::CALLSIGN_LEN] = {};
 #endif
 static uint8_t CONFIGURED_NODE_ID = Settings::DEFAULT_NODE_ID;
 
-static int settings_set_handler(const char *name, size_t len,
-                                settings_read_cb readCallback, void *callbackArgs) {
+static int settings_set_handler(const char *name, size_t len, settings_read_cb readCallback, void *callbackArgs) {
 #ifdef CONFIG_SHELL_FREQUENCY
     if (strcmp(name, "freq") == 0) {
         if (len != sizeof(uint32_t)) {
@@ -38,9 +37,8 @@ static int settings_set_handler(const char *name, size_t len,
 
 #ifdef CONFIG_LICENSED_FREQUENCY
     if (strcmp(name, "cs") == 0) {
-        const size_t to_read = len < static_cast<size_t>(Settings::CALLSIGN_LEN)
-                                   ? len
-                                   : static_cast<size_t>(Settings::CALLSIGN_LEN);
+        const size_t to_read =
+            len < static_cast<size_t>(Settings::CALLSIGN_LEN) ? len : static_cast<size_t>(Settings::CALLSIGN_LEN);
         readCallback(callbackArgs, CONFIGURED_CALLSIGN, to_read);
         return 0;
     }
@@ -90,9 +88,7 @@ int saveFrequency(uint32_t frequency) {
 #endif
 
 #ifdef CONFIG_LICENSED_FREQUENCY
-void getCallsign(char out[CALLSIGN_LEN]) {
-    memcpy(out, CONFIGURED_CALLSIGN, CALLSIGN_LEN);
-}
+void getCallsign(char out[CALLSIGN_LEN]) { memcpy(out, CONFIGURED_CALLSIGN, CALLSIGN_LEN); }
 
 int saveCallsign(const char callsign[CALLSIGN_LEN]) {
     memcpy(CONFIGURED_CALLSIGN, callsign, CALLSIGN_LEN);
@@ -105,9 +101,7 @@ int saveCallsign(const char callsign[CALLSIGN_LEN]) {
 #endif
 
 #ifdef CONFIG_SHELL_NODE_ID
-uint8_t getNodeId() {
-    return CONFIGURED_NODE_ID;
-}
+uint8_t getNodeId() { return CONFIGURED_NODE_ID; }
 
 int saveNodeId(uint8_t nodeId) {
     if (nodeId < 0 || nodeId > 9) return -EINVAL;
@@ -119,7 +113,7 @@ int saveNodeId(uint8_t nodeId) {
     return ret;
 }
 #endif
-} // namespace OutlawSettings
+} // namespace Settings
 
 #ifdef CONFIG_SHELL
 
@@ -147,13 +141,15 @@ static int cmd_freq(const struct shell *sh, size_t argc, char **argv) {
 static int cmd_callsign(const struct shell *sh, size_t argc, char **argv) {
     const size_t len = strlen(argv[1]);
     if (len < 4) {
-        shell_warn(sh, "Callsigns must be at least 4 characters. Assuming no callsign and suspending transmission upon reboot.");
+        shell_warn(
+            sh,
+            "Callsigns must be at least 4 characters. Assuming no callsign and suspending transmission upon reboot.");
         const int ret = Settings::saveCallsign("");
         if (ret != 0) {
             shell_error(sh, "Save failed: %d", ret);
         }
         return ret;
-    } else if (len > (size_t)Settings::CALLSIGN_LEN) {
+    } else if (len > (size_t) Settings::CALLSIGN_LEN) {
         shell_error(sh, "Callsign must be 1-%d characters", Settings::CALLSIGN_LEN);
         return -EINVAL;
     }
@@ -192,18 +188,18 @@ static int cmd_node_id(const struct shell *sh, size_t argc, char **argv) {
 #if defined(CONFIG_SHELL_FREQUENCY) || defined(CONFIG_LICENSED_FREQUENCY) || defined(CONFIG_SHELL_NODE_ID)
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_config,
 #ifdef CONFIG_SHELL_FREQUENCY
-    SHELL_CMD_ARG(freq, NULL, "Set LoRa frequency in Mhz (e.g. 903.123456)", cmd_freq, 2, 0),
+                               SHELL_CMD_ARG(freq, NULL, "Set LoRa frequency in Mhz (e.g. 903.123456)", cmd_freq, 2, 0),
 #endif
 
 #ifdef CONFIG_LICENSED_FREQUENCY
-    SHELL_CMD_ARG(callsign, NULL, "Set callsign, max 6 chars (e.g. W1ABC)", cmd_callsign, 2, 0),
+                               SHELL_CMD_ARG(callsign, NULL, "Set callsign, max 6 chars (e.g. W1ABC)", cmd_callsign, 2,
+                                             0),
 #endif
 
 #ifdef CONFIG_SHELL_NODE_ID
-    SHELL_CMD_ARG(node_id, NULL, "Set node ID (0-9)", cmd_node_id, 2, 0),
+                               SHELL_CMD_ARG(node_id, NULL, "Set node ID (0-9)", cmd_node_id, 2, 0),
 #endif
-    SHELL_SUBCMD_SET_END
-);
+                               SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(config, &sub_config, "Configure settings", NULL);
 

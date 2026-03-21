@@ -55,6 +55,25 @@ config LICENSED_FREQUENCY
   help
     This option enables callsigns prepended to each packet.
 
+config CORE_SETTINGS
+  bool "Common Settings"
+  depends on SETTINGS
+  depends on SETTINGS_NVS
+  help
+    NVS-persisted deployment and operational settings.
+
+config CORE_SETTINGS_FLIGHT_COMPUTER
+  bool "Core Settings Flight Computer"
+  depends on CORE_SETTINGS
+  help
+    This option enables a shell command to set the flight computer at runtime.
+
+config CORE_SETTINGS_TRACKER
+  bool "Core Settings Tracker"
+  depends on CORE_SETTINGS
+  help
+    This option enables a shell command to set the tracker at runtime.
+
 config SHELL_FREQUENCY
   bool "Shell Frequency"
   depends on CORE_SETTINGS

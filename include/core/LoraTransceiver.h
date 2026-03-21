@@ -1,15 +1,15 @@
 #pragma once
 
-#include <array>
-#include <zephyr/drivers/lora.h>
-#include <stdint.h>
-
 #include "zephyr/drivers/gnss.h"
+
+#include <array>
+#include <stdint.h>
+#include <zephyr/drivers/lora.h>
 
 struct LoraFrame;
 
 class LoraTransceiver {
-public:
+  public:
     LoraTransceiver(const uint8_t nodeId, const float frequencyMHz);
 
     /**
@@ -44,7 +44,7 @@ public:
      * @param rssi Received Signal Strength Indicator
      * @param snr Signal to Noise Ratio
      */
-    void receiveCallback(uint8_t *data, uint16_t size, int16_t rssi, int8_t snr);
+    void receiveCallback(uint8_t* data, uint16_t size, int16_t rssi, int8_t snr);
 
     /**
      * Check if the LoRa modem is in TX mode
@@ -76,7 +76,7 @@ public:
      * Set the callsign for transmission to be used for licensed bands
      * @param callsign Set the callsign for transmission if on licensed band
      */
-    void setCallsign(const char *callsign);
+    void setCallsign(const char* callsign);
 
 #endif
 
@@ -86,8 +86,8 @@ public:
      */
     void setNodeId(uint8_t id);
 
-private:
-    lora_modem_config config {
+  private:
+    lora_modem_config config{
 #ifdef CONFIG_LICENSED_FREQUENCY
         .frequency = 435000000,
 #else
@@ -124,19 +124,15 @@ private:
      */
     bool tx(uint8_t* data, uint32_t data_len);
 
-
     /**
      * Check if frequency is in 433MHz band
      * @return True if frequency is in 433MHz band
      */
-    bool is433MHzBand() const {
-        return (config.frequency >= 410'000'000 && config.frequency <= 450'000'000);
-    }
+    bool is433MHzBand() const { return (config.frequency >= 410'000'000 && config.frequency <= 450'000'000); }
 
     /**
      * Prints the contents of a LoRa frame
      * @param frame LoRa frame containing the data to print
      */
     void parseLoraFrame(const LoraFrame& frame, const size_t size, const int16_t rssi, const int8_t snr) const;
-
 };

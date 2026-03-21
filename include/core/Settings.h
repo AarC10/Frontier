@@ -14,7 +14,6 @@ constexpr uint32_t DEFAULT_FREQUENCY = 903.000000;
 constexpr int CALLSIGN_LEN = 6;
 constexpr uint8_t DEFAULT_NODE_ID = 1;
 
-
 /**
  * Initialize the settings subsystem and load persisted values from NVS.
  * Call once at startup before reading any settings.
@@ -45,6 +44,6 @@ int saveNodeId(uint8_t nodeId);
 uint8_t getNodeId();
 #endif
 
-} // namespace OutlawSettings
+} // namespace Settings
 
 #endif

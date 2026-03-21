@@ -1,9 +1,7 @@
 #include <core/TdmaClock.h>
-
+#include <utility>
 #include <zephyr/drivers/counter.h>
 #include <zephyr/logging/log.h>
-
-#include <utility>
 
 LOG_MODULE_REGISTER(tdma_clock, LOG_LEVEL_INF);
 
@@ -11,7 +9,7 @@ namespace {
 constexpr uint32_t frameLenMs = 1000;
 constexpr uint32_t gpsDemoteMs = 5000;
 constexpr uint32_t hunterStaleMs = 30000;
-}
+} // namespace
 
 TdmaClock& TdmaClock::instance() {
     static TdmaClock clock;
@@ -53,17 +51,11 @@ void TdmaClock::init(const gpio_dt_spec* pps, const device* tim2Dev) {
     }
 }
 
-TdmaClock::Source TdmaClock::source() const {
-    return static_cast<Source>(atomic_get(&currentSource));
-}
+TdmaClock::Source TdmaClock::source() const { return static_cast<Source>(atomic_get(&currentSource)); }
 
-uint32_t TdmaClock::epochTicks() const {
-    return static_cast<uint32_t>(atomic_get(&epochTicksValue));
-}
+uint32_t TdmaClock::epochTicks() const { return static_cast<uint32_t>(atomic_get(&epochTicksValue)); }
 
-uint32_t TdmaClock::frameNumber() const {
-    return static_cast<uint32_t>(atomic_get(&frameNumberValue));
-}
+uint32_t TdmaClock::frameNumber() const { return static_cast<uint32_t>(atomic_get(&frameNumberValue)); }
 
 void TdmaClock::onHunterBeacon(uint32_t beaconFrameNumber, uint32_t timestamp) {
     atomic_set(&frameNumberValue, static_cast<atomic_val_t>(beaconFrameNumber));
@@ -89,7 +81,7 @@ void TdmaClock::ppsIsr(const device* dev, gpio_callback* cb, uint32_t pins) {
     atomic_set(&clock.currentSource, static_cast<atomic_val_t>(Source::GPS_PPS));
 
     clock.stopFreerun();
-    (void)k_work_reschedule(&clock.demoteWork, K_MSEC(gpsDemoteMs));
+    (void) k_work_reschedule(&clock.demoteWork, K_MSEC(gpsDemoteMs));
 }
 
 void TdmaClock::freerunExpiry(k_timer* timer) {
@@ -133,13 +125,9 @@ void TdmaClock::demoteHandler(k_work* work) {
     }
 }
 
-void TdmaClock::startFreerun() {
-    k_timer_start(&freerunTimer, K_NO_WAIT, K_MSEC(frameLenMs));
-}
+void TdmaClock::startFreerun() { k_timer_start(&freerunTimer, K_NO_WAIT, K_MSEC(frameLenMs)); }
 
-void TdmaClock::stopFreerun() {
-    k_timer_stop(&freerunTimer);
-}
+void TdmaClock::stopFreerun() { k_timer_stop(&freerunTimer); }
 
 uint32_t TdmaClock::readTim2Ticks() const {
     if (tim2 == nullptr || !device_is_ready(tim2)) {
@@ -154,7 +142,4 @@ uint32_t TdmaClock::readTim2Ticks() const {
     return ticks;
 }
 
-void TdmaClock::scheduleDemote(k_timeout_t delay) {
-    (void)k_work_reschedule(&demoteWork, delay);
-}
-
+void TdmaClock::scheduleDemote(k_timeout_t delay) { (void) k_work_reschedule(&demoteWork, delay); }

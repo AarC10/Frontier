@@ -1,10 +1,9 @@
 #include "core/time.h"
 
 #include <atomic>
-
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/drivers/gpio.h>
 
 LOG_MODULE_REGISTER(time);
 
@@ -50,6 +49,4 @@ int time_setup_pps(const gpio_dt_spec* pps) {
     return 0;
 }
 
-uint32_t time_get_gps_seconds() {
-    return gps_seconds.load(std::memory_order_relaxed);
-}
+uint32_t time_get_gps_seconds() { return gps_seconds.load(std::memory_order_relaxed); }

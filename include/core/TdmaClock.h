@@ -7,7 +7,7 @@
 #include <zephyr/sys/atomic.h>
 
 class TdmaClock {
-public:
+  public:
     enum class Source : uint8_t {
         FREERUN = 0,
         HUNTER = 1,
@@ -23,7 +23,7 @@ public:
 
     void onHunterBeacon(uint32_t frameNumber, uint32_t timestamp);
 
-private:
+  private:
     TdmaClock() = default;
 
     static void ppsIsr(const device* dev, gpio_callback* cb, uint32_t pins);
@@ -48,4 +48,3 @@ private:
     const device* tim2;
     bool ppsConfigured;
 };
-

@@ -3,32 +3,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 #include "rda5807m.h"
 
-#include <zephyr/kernel.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(RDA5807M);
 
-#define RDA5807M_SHADOW_COUNT       6   /* Regs 0x02–0x07 */
-#define RDA5807M_TUNE_TIMEOUT_MS    200
-#define RDA5807M_TUNE_POLL_MS       10
-#define RDA5807M_SEEK_TIMEOUT_MS    5000
-#define RDA5807M_RESET_DELAY_MS     50
+#define RDA5807M_SHADOW_COUNT    6 /* Regs 0x02–0x07 */
+#define RDA5807M_TUNE_TIMEOUT_MS 200
+#define RDA5807M_TUNE_POLL_MS    10
+#define RDA5807M_SEEK_TIMEOUT_MS 5000
+#define RDA5807M_RESET_DELAY_MS  50
 
-#define SHADOW_CONFIG   0
-#define SHADOW_CHANNEL  1
-#define SHADOW_GPIO     2
-#define SHADOW_VOLUME   3
-#define SHADOW_OPEN     4
-#define SHADOW_BLEND    5
+#define SHADOW_CONFIG  0
+#define SHADOW_CHANNEL 1
+#define SHADOW_GPIO    2
+#define SHADOW_VOLUME  3
+#define SHADOW_OPEN    4
+#define SHADOW_BLEND   5
 
 struct rda5807m_config {
     struct i2c_dt_spec i2c;
-    uint8_t  vol_default;
-    uint8_t  band;      /* 0=87-108, 1=76-91, 2=76-108 */
+    uint8_t vol_default;
+    uint8_t band; /* 0=87-108, 1=76-91, 2=76-108 */
 };
 
 struct rda5807m_data {
@@ -48,14 +47,13 @@ static int rda5807m_write_regs(const struct device *dev, uint8_t count) {
 
     for (int i = 0; i < count; i++) {
         buff[i * 2] = (data->shadow[i] >> 8) & 0xFF;
-        buff[i * 2 + 1] =  data->shadow[i]       & 0xFF;
+        buff[i * 2 + 1] = data->shadow[i] & 0xFF;
     }
 
     return i2c_write_dt(&cfg->i2c, buff, count * 2);
 }
 
-static int rda5807m_read_status_raw(const struct device *dev,
-                                    uint16_t *status_a, uint16_t *status_b) {
+static int rda5807m_read_status_raw(const struct device *dev, uint16_t *status_a, uint16_t *status_b) {
     const struct rda5807m_config *cfg = dev->config;
     uint8_t buff[4] = {0};
 
@@ -65,13 +63,13 @@ static int rda5807m_read_status_raw(const struct device *dev,
         return ret;
     }
 
-    *status_a = ((uint16_t)buff[0] << 8) | buff[1];
-    *status_b = ((uint16_t)buff[2] << 8) | buff[3];
+    *status_a = ((uint16_t) buff[0] << 8) | buff[1];
+    *status_b = ((uint16_t) buff[2] << 8) | buff[3];
     return 0;
 }
 
-static int rda5807m_wait_stc(const struct device *dev, uint32_t timeout_ms,
-                              uint16_t *status_a_out, uint16_t *status_b_out) {
+static int rda5807m_wait_stc(const struct device *dev, uint32_t timeout_ms, uint16_t *status_a_out,
+                             uint16_t *status_b_out) {
     uint16_t status_a;
     uint16_t status_b;
     uint32_t elapsed = 0;
@@ -112,10 +110,8 @@ int rda5807m_set_frequency(const struct device *dev, uint32_t freq_khz) {
 
     k_mutex_lock(&data->lock, K_FOREVER);
 
-    data->shadow[SHADOW_CHANNEL] = (channel << RDA5807M_CHAN_SHIFT) |
-                                    RDA5807M_CHAN_TUNE              |
-                                    RDA5807M_CHAN_BAND_87108        |
-                                    RDA5807M_CHAN_SPACE_100K;
+    data->shadow[SHADOW_CHANNEL] =
+        (channel << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE | RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
 
     ret = rda5807m_write_regs(dev, 2);
     if (ret) {
@@ -172,7 +168,7 @@ int rda5807m_set_mute(const struct device *dev, bool mute) {
     if (mute) {
         data->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_DMUTE;
     } else {
-        data->shadow[SHADOW_CONFIG] |=  RDA5807M_CFG_DMUTE;
+        data->shadow[SHADOW_CONFIG] |= RDA5807M_CFG_DMUTE;
     }
 
     int ret = rda5807m_write_regs(dev, 1);
@@ -184,8 +180,7 @@ int rda5807m_set_mute(const struct device *dev, bool mute) {
     return ret;
 }
 
-int rda5807m_seek(const struct device *dev, bool up)
-{
+int rda5807m_seek(const struct device *dev, bool up) {
     struct rda5807m_data *data = dev->data;
     uint16_t status_a;
     uint16_t status_b;
@@ -196,7 +191,7 @@ int rda5807m_seek(const struct device *dev, bool up)
     data->shadow[SHADOW_CONFIG] |= RDA5807M_CFG_SEEK;
 
     if (up) {
-        data->shadow[SHADOW_CONFIG] |=  RDA5807M_CFG_SEEKUP;
+        data->shadow[SHADOW_CONFIG] |= RDA5807M_CFG_SEEKUP;
     } else {
         data->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEKUP;
     }
@@ -246,10 +241,10 @@ int rda5807m_get_status(const struct device *dev, struct rda5807m_status *status
     }
 
     status->frequency_khz = data->frequency_khz;
-    status->rssi           = (sb & RDA5807M_ST_RSSI_MASK) >> RDA5807M_ST_RSSI_SHIFT;
-    status->stereo         = (sa & RDA5807M_ST_STEREO) != 0;
-    status->station        = (sb & RDA5807M_ST_FM_TRUE) != 0;
-    status->seek_fail      = (sa & RDA5807M_ST_SF) != 0;
+    status->rssi = (sb & RDA5807M_ST_RSSI_MASK) >> RDA5807M_ST_RSSI_SHIFT;
+    status->stereo = (sa & RDA5807M_ST_STEREO) != 0;
+    status->station = (sb & RDA5807M_ST_FM_TRUE) != 0;
+    status->seek_fail = (sa & RDA5807M_ST_SF) != 0;
 
     return 0;
 }
@@ -266,9 +261,7 @@ static int rda5807m_init(const struct device *dev) {
         return -ENODEV;
     }
 
-    data->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET |
-                                   RDA5807M_CFG_ENABLE     |
-                                   RDA5807M_CFG_NEW_METHOD;
+    data->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE | RDA5807M_CFG_NEW_METHOD;
     ret = rda5807m_write_regs(dev, 1);
     if (ret) {
         LOG_ERR("Reset write failed: %d", ret);
@@ -276,15 +269,12 @@ static int rda5807m_init(const struct device *dev) {
     }
     k_msleep(RDA5807M_RESET_DELAY_MS);
 
-    data->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ       |
-                                   RDA5807M_CFG_DMUTE      |
-                                   RDA5807M_CFG_NEW_METHOD |
-                                   RDA5807M_CFG_ENABLE;
+    data->shadow[SHADOW_CONFIG] =
+        RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE | RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
 
     data->shadow[SHADOW_CHANNEL] = RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
 
-    data->shadow[SHADOW_VOLUME] = (RDA5807M_SEEKTH_DEFAULT << RDA5807M_SEEKTH_SHIFT) |
-                                   cfg->vol_default;
+    data->shadow[SHADOW_VOLUME] = (RDA5807M_SEEKTH_DEFAULT << RDA5807M_SEEKTH_SHIFT) | cfg->vol_default;
 
     ret = rda5807m_write_regs(dev, 4);
     if (ret) {
@@ -297,4 +287,3 @@ static int rda5807m_init(const struct device *dev) {
     LOG_INF("RDA5807M initialized, vol=%u", cfg->vol_default);
     return 0;
 }
-

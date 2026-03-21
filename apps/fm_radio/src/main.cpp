@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <array>
+#include <cstring>
 #include <rda5807m.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -12,8 +14,6 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <array>
-#include <cstring>
 
 LOG_MODULE_REGISTER(fm_tuner, LOG_LEVEL_INF);
 
@@ -24,19 +24,19 @@ LOG_MODULE_REGISTER(fm_tuner, LOG_LEVEL_INF);
 #define BT_UUID_FM_MUTE_VAL    BT_UUID_128_ENCODE(0x12345678, 0x0004, 0x1000, 0x8000, 0x00805F9B34FB)
 #define BT_UUID_FM_STATUS_VAL  BT_UUID_128_ENCODE(0x12345678, 0x0005, 0x1000, 0x8000, 0x00805F9B34FB)
 
-#define RDA5807M_SHADOW_COUNT       6
-#define RDA5807M_TUNE_TIMEOUT_MS    1000
-#define RDA5807M_TUNE_POLL_MS       10
-#define RDA5807M_SEEK_TIMEOUT_MS    5000
-#define RDA5807M_RESET_DELAY_MS     150
-#define RDA5807M_I2C_ADDR           0x10
+#define RDA5807M_SHADOW_COUNT    6
+#define RDA5807M_TUNE_TIMEOUT_MS 1000
+#define RDA5807M_TUNE_POLL_MS    10
+#define RDA5807M_SEEK_TIMEOUT_MS 5000
+#define RDA5807M_RESET_DELAY_MS  150
+#define RDA5807M_I2C_ADDR        0x10
 
-#define SHADOW_CONFIG   0
-#define SHADOW_CHANNEL  1
-#define SHADOW_GPIO     2
-#define SHADOW_VOLUME   3
-#define SHADOW_OPEN     4
-#define SHADOW_BLEND    5
+#define SHADOW_CONFIG  0
+#define SHADOW_CHANNEL 1
+#define SHADOW_GPIO    2
+#define SHADOW_VOLUME  3
+#define SHADOW_OPEN    4
+#define SHADOW_BLEND   5
 
 static const struct bt_uuid_128 uuid_fm_service = BT_UUID_INIT_128(BT_UUID_FM_SERVICE_VAL);
 static const struct bt_uuid_128 uuid_fm_freq = BT_UUID_INIT_128(BT_UUID_FM_FREQ_VAL);
@@ -104,15 +104,14 @@ static int rda5807m_write_regs(struct rda5807m_radio *dev, uint8_t count) {
     uint8_t buff[RDA5807M_SHADOW_COUNT * 2] = {0};
 
     for (int i = 0; i < count; i++) {
-        buff[i * 2]     = (dev->shadow[i] >> 8) & 0xFF;
-        buff[i * 2 + 1] =  dev->shadow[i]       & 0xFF;
+        buff[i * 2] = (dev->shadow[i] >> 8) & 0xFF;
+        buff[i * 2 + 1] = dev->shadow[i] & 0xFF;
     }
 
     return i2c_write_dt(&dev->i2c, buff, count * 2);
 }
 
-static int rda5807m_read_status_raw(struct rda5807m_radio *dev,
-                                     uint16_t *status_a, uint16_t *status_b) {
+static int rda5807m_read_status_raw(struct rda5807m_radio *dev, uint16_t *status_a, uint16_t *status_b) {
     uint8_t buff[4] = {0};
 
     int ret = i2c_read_dt(&dev->i2c, buff, sizeof(buff));
@@ -121,13 +120,13 @@ static int rda5807m_read_status_raw(struct rda5807m_radio *dev,
         return ret;
     }
 
-    *status_a = ((uint16_t)buff[0] << 8) | buff[1];
-    *status_b = ((uint16_t)buff[2] << 8) | buff[3];
+    *status_a = ((uint16_t) buff[0] << 8) | buff[1];
+    *status_b = ((uint16_t) buff[2] << 8) | buff[3];
     return 0;
 }
 
-static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms,
-                              uint16_t *status_a_out, uint16_t *status_b_out) {
+static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms, uint16_t *status_a_out,
+                             uint16_t *status_b_out) {
     uint16_t status_a;
     uint16_t status_b;
     uint32_t elapsed = 0;
@@ -142,10 +141,8 @@ static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms,
         }
 
         if (elapsed <= 50) {
-            LOG_INF("Poll %u ms: 0x0A=0x%04X 0x0B=0x%04X STC=%d SF=%d",
-                    elapsed, status_a, status_b,
-                    (status_a & RDA5807M_ST_STC) != 0,
-                    (status_a & RDA5807M_ST_SF) != 0);
+            LOG_INF("Poll %u ms: 0x0A=0x%04X 0x0B=0x%04X STC=%d SF=%d", elapsed, status_a, status_b,
+                    (status_a & RDA5807M_ST_STC) != 0, (status_a & RDA5807M_ST_SF) != 0);
         }
 
         if (status_a & RDA5807M_ST_STC) {
@@ -155,8 +152,7 @@ static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms,
         }
     }
 
-    LOG_WRN("STC timeout after %u ms — last: 0x0A=0x%04X 0x0B=0x%04X",
-            timeout_ms, status_a, status_b);
+    LOG_WRN("STC timeout after %u ms — last: 0x0A=0x%04X 0x0B=0x%04X", timeout_ms, status_a, status_b);
     return -ETIMEDOUT;
 }
 
@@ -173,8 +169,8 @@ static int rda5807m_set_frequency(struct rda5807m_radio *dev, uint32_t freq_khz)
 
     k_mutex_lock(&dev->lock, K_FOREVER);
 
-    dev->shadow[SHADOW_CHANNEL] = (channel << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE |
-                                  RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
+    dev->shadow[SHADOW_CHANNEL] =
+        (channel << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE | RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
 
     ret = rda5807m_write_regs(dev, 2);
     if (ret) {
@@ -185,14 +181,13 @@ static int rda5807m_set_frequency(struct rda5807m_radio *dev, uint32_t freq_khz)
     ret = rda5807m_wait_stc(dev, RDA5807M_TUNE_TIMEOUT_MS, nullptr, nullptr);
     if (ret == -ETIMEDOUT) {
         LOG_WRN("Tune timed out, resetting chip");
-        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE |
-                                     RDA5807M_CFG_NEW_METHOD;
+        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE | RDA5807M_CFG_NEW_METHOD;
         rda5807m_write_regs(dev, 1);
         k_msleep(50);
-        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE |
-                                     RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
-        dev->shadow[SHADOW_CHANNEL] = (channel << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE |
-                                      RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
+        dev->shadow[SHADOW_CONFIG] =
+            RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE | RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
+        dev->shadow[SHADOW_CHANNEL] =
+            (channel << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE | RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
         rda5807m_write_regs(dev, 4);
         k_msleep(50);
         dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
@@ -207,8 +202,8 @@ static int rda5807m_set_frequency(struct rda5807m_radio *dev, uint32_t freq_khz)
     dev->frequency_khz = freq_khz;
     LOG_INF("Tuned to %u kHz", freq_khz);
 
-    cleanup:
-        dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
+cleanup:
+    dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
     int write_ret = rda5807m_write_regs(dev, 2);
     if (write_ret) {
         LOG_ERR("TUNE bit clear failed: %d", write_ret);
@@ -276,17 +271,16 @@ static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
     ret = rda5807m_wait_stc(dev, RDA5807M_SEEK_TIMEOUT_MS, &status_a, &status_b);
     if (ret == -ETIMEDOUT) {
         LOG_WRN("Seek timed out, resetting chip");
-        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE |
-                                     RDA5807M_CFG_NEW_METHOD;
+        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE | RDA5807M_CFG_NEW_METHOD;
         rda5807m_write_regs(dev, 1);
         k_msleep(50);
-        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE |
-                                     RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
+        dev->shadow[SHADOW_CONFIG] =
+            RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE | RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
         rda5807m_write_regs(dev, 4);
 
         uint16_t ch = (dev->frequency_khz - RDA5807M_FREQ_BASE_KHZ) / RDA5807M_FREQ_STEP_KHZ;
-        dev->shadow[SHADOW_CHANNEL] = (ch << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE |
-                                      RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
+        dev->shadow[SHADOW_CHANNEL] =
+            (ch << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE | RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
         rda5807m_write_regs(dev, 2);
         k_msleep(50);
         dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
@@ -302,12 +296,12 @@ static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
         ret = -EIO;
     } else {
         uint16_t channel = (status_a & RDA5807M_ST_READCHAN_MASK) >> RDA5807M_ST_READCHAN_SHIFT;
-        dev->frequency_khz = ((uint32_t)channel * RDA5807M_FREQ_STEP_KHZ) + RDA5807M_FREQ_BASE_KHZ;
+        dev->frequency_khz = ((uint32_t) channel * RDA5807M_FREQ_STEP_KHZ) + RDA5807M_FREQ_BASE_KHZ;
         LOG_INF("Seek landed at %u kHz", dev->frequency_khz);
     }
 
-    cleanup:
-        dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEK;
+cleanup:
+    dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEK;
     int write_ret = rda5807m_write_regs(dev, 1);
     if (write_ret) {
         LOG_ERR("SEEK bit clear failed: %d", write_ret);
@@ -357,8 +351,7 @@ static int rda5807m_init(struct rda5807m_radio *dev) {
     }
     k_msleep(RDA5807M_RESET_DELAY_MS);
 
-    dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE | RDA5807M_CFG_NEW_METHOD |
-                                 RDA5807M_CFG_ENABLE;
+    dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE | RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
     dev->shadow[SHADOW_CHANNEL] = RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
     dev->shadow[SHADOW_VOLUME] = (RDA5807M_SEEKTH_DEFAULT << RDA5807M_SEEKTH_SHIFT) | 8U;
 
@@ -373,14 +366,13 @@ static int rda5807m_init(struct rda5807m_radio *dev) {
     return 0;
 }
 
-static ssize_t read_freq(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
-                         uint16_t offset) {
+static ssize_t read_freq(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset) {
     uint32_t freq_be = __builtin_bswap32(radio.frequency_khz);
     return bt_gatt_attr_read(nullptr, attr, buf, len, offset, &freq_be, sizeof(freq_be));
 }
 
-static ssize_t write_freq(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
-                          uint16_t, uint8_t) {
+static ssize_t write_freq(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len, uint16_t,
+                          uint8_t) {
     if (len != sizeof(uint32_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
@@ -399,13 +391,12 @@ static ssize_t write_freq(struct bt_conn *, const struct bt_gatt_attr *, const v
     return len;
 }
 
-static ssize_t read_vol(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
-                        uint16_t offset) {
+static ssize_t read_vol(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset) {
     return bt_gatt_attr_read(nullptr, attr, buf, len, offset, &current_vol, sizeof(current_vol));
 }
 
-static ssize_t write_vol(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
-                         uint16_t, uint8_t) {
+static ssize_t write_vol(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len, uint16_t,
+                         uint8_t) {
     if (len != sizeof(uint8_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
@@ -421,8 +412,8 @@ static ssize_t write_vol(struct bt_conn *, const struct bt_gatt_attr *, const vo
     return len;
 }
 
-static ssize_t write_seek(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
-                          uint16_t, uint8_t) {
+static ssize_t write_seek(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len, uint16_t,
+                          uint8_t) {
     if (len != sizeof(uint8_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
@@ -438,14 +429,13 @@ static ssize_t write_seek(struct bt_conn *, const struct bt_gatt_attr *, const v
     return len;
 }
 
-static ssize_t read_mute(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
-                         uint16_t offset) {
+static ssize_t read_mute(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset) {
     uint8_t mute_byte = current_mute ? 1U : 0U;
     return bt_gatt_attr_read(nullptr, attr, buf, len, offset, &mute_byte, sizeof(mute_byte));
 }
 
-static ssize_t write_mute(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
-                          uint16_t, uint8_t) {
+static ssize_t write_mute(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len, uint16_t,
+                          uint8_t) {
     if (len != sizeof(uint8_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
@@ -469,21 +459,18 @@ static void status_ccc_changed(const struct bt_gatt_attr *, uint16_t value) {
     LOG_INF("Status notifications %s", status_notify_enabled ? "enabled" : "disabled");
 }
 
-BT_GATT_SERVICE_DEFINE(fm_radio_svc,
-                       BT_GATT_PRIMARY_SERVICE(&uuid_fm_service),
-                       BT_GATT_CHARACTERISTIC(&uuid_fm_freq.uuid,
-                                              BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE | BT_GATT_CHRC_NOTIFY,
-                                              BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_freq, write_freq, nullptr),
-                       BT_GATT_CCC(nullptr, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-                       BT_GATT_CHARACTERISTIC(&uuid_fm_vol.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
-                                              BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_vol, write_vol, nullptr),
-                       BT_GATT_CHARACTERISTIC(&uuid_fm_seek.uuid, BT_GATT_CHRC_WRITE, BT_GATT_PERM_WRITE, nullptr,
-                                              write_seek, nullptr),
-                       BT_GATT_CHARACTERISTIC(&uuid_fm_mute.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
-                                              BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_mute, write_mute, nullptr),
-                       BT_GATT_CHARACTERISTIC(&uuid_fm_status.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE, nullptr,
-                                              nullptr, nullptr),
-                       BT_GATT_CCC(status_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
+BT_GATT_SERVICE_DEFINE(
+    fm_radio_svc, BT_GATT_PRIMARY_SERVICE(&uuid_fm_service),
+    BT_GATT_CHARACTERISTIC(&uuid_fm_freq.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE | BT_GATT_CHRC_NOTIFY,
+                           BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_freq, write_freq, nullptr),
+    BT_GATT_CCC(nullptr, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+    BT_GATT_CHARACTERISTIC(&uuid_fm_vol.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
+                           BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_vol, write_vol, nullptr),
+    BT_GATT_CHARACTERISTIC(&uuid_fm_seek.uuid, BT_GATT_CHRC_WRITE, BT_GATT_PERM_WRITE, nullptr, write_seek, nullptr),
+    BT_GATT_CHARACTERISTIC(&uuid_fm_mute.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
+                           BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_mute, write_mute, nullptr),
+    BT_GATT_CHARACTERISTIC(&uuid_fm_status.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE, nullptr, nullptr, nullptr),
+    BT_GATT_CCC(status_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
 
 static const std::array<bt_data, 2> ad = {{
     BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR),
@@ -547,7 +534,7 @@ static void status_notify_thread_fn(void *, void *, void *) {
             uint8_t rssi;
             uint8_t stereo;
         } payload = {
-            .rssi   = status.rssi,
+            .rssi = status.rssi,
             .stereo = static_cast<uint8_t>(status.stereo ? 1U : 0U),
         };
 
@@ -578,9 +565,8 @@ int main() {
     LOG_INF("RDA5807M ready");
 
     k_work_queue_init(&radio_workq);
-    k_work_queue_start(&radio_workq, radio_workq_stack,
-                       K_THREAD_STACK_SIZEOF(radio_workq_stack),
-                       K_PRIO_PREEMPT(5), nullptr);
+    k_work_queue_start(&radio_workq, radio_workq_stack, K_THREAD_STACK_SIZEOF(radio_workq_stack), K_PRIO_PREEMPT(5),
+                       nullptr);
     k_work_init(&seek_work, seek_work_handler);
 
     ret = bt_enable(nullptr);
