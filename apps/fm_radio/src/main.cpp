@@ -67,6 +67,34 @@ static uint32_t current_freq_khz = 101000U;
 static struct bt_conn *active_conn = nullptr;
 static bool status_notify_enabled = false;
 static const struct bt_gatt_attr *status_attr = nullptr;
+static const struct bt_gatt_attr *freq_attr = nullptr;
+
+static struct k_work_q radio_workq;
+static K_THREAD_STACK_DEFINE(radio_workq_stack, 2048);
+static struct k_work seek_work;
+static bool seek_direction = true;
+
+static int rda5807m_seek(struct rda5807m_radio *dev, bool up);
+static int rda5807m_get_status(struct rda5807m_radio *dev, struct rda5807m_status *status);
+
+static void seek_work_handler(struct k_work *work) {
+    int ret = rda5807m_seek(&radio, seek_direction);
+    if (ret == 0) {
+        struct rda5807m_status status = {};
+        if (rda5807m_get_status(&radio, &status) == 0) {
+            current_freq_khz = status.frequency_khz;
+        }
+    } else if (ret == -EIO) {
+        LOG_WRN("Seek: no station found");
+    } else {
+        LOG_ERR("seek failed: %d", ret);
+    }
+
+    if (freq_attr) {
+        uint32_t freq_be = __builtin_bswap32(radio.frequency_khz);
+        bt_gatt_notify(nullptr, freq_attr, &freq_be, sizeof(freq_be));
+    }
+}
 
 static int rda5807m_write_regs(struct rda5807m_radio *dev, uint8_t count) {
     if (count > RDA5807M_SHADOW_COUNT) {
@@ -113,7 +141,6 @@ static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms,
             return ret;
         }
 
-        /* Log first few polls to see what chip is reporting */
         if (elapsed <= 50) {
             LOG_INF("Poll %u ms: 0x0A=0x%04X 0x0B=0x%04X STC=%d SF=%d",
                     elapsed, status_a, status_b,
@@ -158,14 +185,20 @@ static int rda5807m_set_frequency(struct rda5807m_radio *dev, uint32_t freq_khz)
     ret = rda5807m_wait_stc(dev, RDA5807M_TUNE_TIMEOUT_MS, nullptr, nullptr);
     if (ret == -ETIMEDOUT) {
         LOG_WRN("Tune timed out, resetting chip");
-        dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE; /* clear BEFORE restore write */
         dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE |
                                      RDA5807M_CFG_NEW_METHOD;
         rda5807m_write_regs(dev, 1);
         k_msleep(50);
         dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE |
                                      RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
-        rda5807m_write_regs(dev, 4); /* now safe — TUNE already cleared in shadow */
+        dev->shadow[SHADOW_CHANNEL] = (channel << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE |
+                                      RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
+        rda5807m_write_regs(dev, 4);
+        k_msleep(50);
+        dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
+        rda5807m_write_regs(dev, 2);
+
+        dev->frequency_khz = freq_khz;
         goto cleanup;
     } else if (ret) {
         goto cleanup;
@@ -175,7 +208,6 @@ static int rda5807m_set_frequency(struct rda5807m_radio *dev, uint32_t freq_khz)
     LOG_INF("Tuned to %u kHz", freq_khz);
 
     cleanup:
-        /* Always clear TUNE bit — leaving it set prevents subsequent tunes */
         dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
     int write_ret = rda5807m_write_regs(dev, 2);
     if (write_ret) {
@@ -401,19 +433,8 @@ static ssize_t write_seek(struct bt_conn *, const struct bt_gatt_attr *, const v
         return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
     }
 
-    if (int ret = rda5807m_seek(&radio, dir == 0x01); ret == -EIO) {
-        LOG_WRN("Seek: no station found");
-        return len;
-    } else if (ret) {
-        LOG_ERR("seek failed: %d", ret);
-        return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
-    }
-
-    struct rda5807m_status status = {};
-    if (rda5807m_get_status(&radio, &status) == 0) {
-        current_freq_khz = status.frequency_khz;
-    }
-
+    seek_direction = (dir == 0x01);
+    k_work_submit_to_queue(&radio_workq, &seek_work);
     return len;
 }
 
@@ -450,8 +471,10 @@ static void status_ccc_changed(const struct bt_gatt_attr *, uint16_t value) {
 
 BT_GATT_SERVICE_DEFINE(fm_radio_svc,
                        BT_GATT_PRIMARY_SERVICE(&uuid_fm_service),
-                       BT_GATT_CHARACTERISTIC(&uuid_fm_freq.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
+                       BT_GATT_CHARACTERISTIC(&uuid_fm_freq.uuid,
+                                              BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE | BT_GATT_CHRC_NOTIFY,
                                               BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_freq, write_freq, nullptr),
+                       BT_GATT_CCC(nullptr, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
                        BT_GATT_CHARACTERISTIC(&uuid_fm_vol.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
                                               BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_vol, write_vol, nullptr),
                        BT_GATT_CHARACTERISTIC(&uuid_fm_seek.uuid, BT_GATT_CHRC_WRITE, BT_GATT_PERM_WRITE, nullptr,
@@ -554,6 +577,12 @@ int main() {
 
     LOG_INF("RDA5807M ready");
 
+    k_work_queue_init(&radio_workq);
+    k_work_queue_start(&radio_workq, radio_workq_stack,
+                       K_THREAD_STACK_SIZEOF(radio_workq_stack),
+                       K_PRIO_PREEMPT(5), nullptr);
+    k_work_init(&seek_work, seek_work_handler);
+
     ret = bt_enable(nullptr);
     if (ret) {
         LOG_ERR("BT enable failed: %d", ret);
@@ -565,6 +594,12 @@ int main() {
     status_attr = bt_gatt_find_by_uuid(fm_radio_svc.attrs, fm_radio_svc.attr_count, &uuid_fm_status.uuid);
     if (!status_attr) {
         LOG_ERR("Status attr not found — check service table");
+        return -ENOENT;
+    }
+
+    freq_attr = bt_gatt_find_by_uuid(fm_radio_svc.attrs, fm_radio_svc.attr_count, &uuid_fm_freq.uuid);
+    if (!freq_attr) {
+        LOG_ERR("Freq attr not found — check service table");
         return -ENOENT;
     }
 
