@@ -7,11 +7,13 @@
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
-#include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/device.h>
+#include <zephyr/drivers/i2c.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <array>
+#include <cstring>
 
 LOG_MODULE_REGISTER(fm_tuner, LOG_LEVEL_INF);
 
@@ -22,36 +24,291 @@ LOG_MODULE_REGISTER(fm_tuner, LOG_LEVEL_INF);
 #define BT_UUID_FM_MUTE_VAL    BT_UUID_128_ENCODE(0x12345678, 0x0004, 0x1000, 0x8000, 0x00805F9B34FB)
 #define BT_UUID_FM_STATUS_VAL  BT_UUID_128_ENCODE(0x12345678, 0x0005, 0x1000, 0x8000, 0x00805F9B34FB)
 
-static struct bt_uuid_128 uuid_fm_service = BT_UUID_INIT_128(BT_UUID_FM_SERVICE_VAL);
-static struct bt_uuid_128 uuid_fm_freq = BT_UUID_INIT_128(BT_UUID_FM_FREQ_VAL);
-static struct bt_uuid_128 uuid_fm_vol = BT_UUID_INIT_128(BT_UUID_FM_VOL_VAL);
-static struct bt_uuid_128 uuid_fm_seek = BT_UUID_INIT_128(BT_UUID_FM_SEEK_VAL);
-static struct bt_uuid_128 uuid_fm_mute = BT_UUID_INIT_128(BT_UUID_FM_MUTE_VAL);
-static struct bt_uuid_128 uuid_fm_status = BT_UUID_INIT_128(BT_UUID_FM_STATUS_VAL);
+#define RDA5807M_SHADOW_COUNT       6
+#define RDA5807M_TUNE_TIMEOUT_MS    200
+#define RDA5807M_TUNE_POLL_MS       10
+#define RDA5807M_SEEK_TIMEOUT_MS    5000
+#define RDA5807M_RESET_DELAY_MS     50
+#define RDA5807M_I2C_ADDR           0x10
 
-static const struct device *radio = DEVICE_DT_GET(DT_NODELABEL(rda5807m));
+#define SHADOW_CONFIG   0
+#define SHADOW_CHANNEL  1
+#define SHADOW_GPIO     2
+#define SHADOW_VOLUME   3
+#define SHADOW_OPEN     4
+#define SHADOW_BLEND    5
 
-static uint32_t current_freq_khz = 101000U;
+static const struct bt_uuid_128 uuid_fm_service = BT_UUID_INIT_128(BT_UUID_FM_SERVICE_VAL);
+static const struct bt_uuid_128 uuid_fm_freq = BT_UUID_INIT_128(BT_UUID_FM_FREQ_VAL);
+static const struct bt_uuid_128 uuid_fm_vol = BT_UUID_INIT_128(BT_UUID_FM_VOL_VAL);
+static const struct bt_uuid_128 uuid_fm_seek = BT_UUID_INIT_128(BT_UUID_FM_SEEK_VAL);
+static const struct bt_uuid_128 uuid_fm_mute = BT_UUID_INIT_128(BT_UUID_FM_MUTE_VAL);
+static const struct bt_uuid_128 uuid_fm_status = BT_UUID_INIT_128(BT_UUID_FM_STATUS_VAL);
+
+static const struct i2c_dt_spec radio_i2c = I2C_DT_SPEC_GET(DT_ALIAS(radio0));
+
+struct rda5807m_radio {
+    struct i2c_dt_spec i2c;
+    uint16_t shadow[RDA5807M_SHADOW_COUNT];
+    uint32_t frequency_khz;
+    struct k_mutex lock;
+};
+
+static struct rda5807m_radio radio = {
+    .i2c = radio_i2c,
+    .shadow = {},
+    .frequency_khz = 101000U,
+};
+
 static uint8_t current_vol = 8U;
 static bool current_mute = false;
+static uint32_t current_freq_khz = 101000U;
 
 static struct bt_conn *active_conn = nullptr;
 static bool status_notify_enabled = false;
 static const struct bt_gatt_attr *status_attr = nullptr;
 
-struct __attribute__((packed)) fm_status_t {
-    uint8_t rssi;
-    uint8_t stereo;
-};
+static int rda5807m_write_regs(struct rda5807m_radio *dev, uint8_t count) {
+    uint8_t buff[RDA5807M_SHADOW_COUNT * 2] = {0};
 
-static ssize_t read_freq(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
-                         uint16_t offset) {
-    uint32_t freq_be = __builtin_bswap32(current_freq_khz);
-    return bt_gatt_attr_read(conn, attr, buf, len, offset, &freq_be, sizeof(freq_be));
+    if (count > RDA5807M_SHADOW_COUNT) {
+        return -EINVAL;
+    }
+
+    for (int i = 0; i < count; i++) {
+        buff[i * 2] = (dev->shadow[i] >> 8) & 0xFF;
+        buff[i * 2 + 1] = dev->shadow[i] & 0xFF;
+    }
+
+    return i2c_write_dt(&dev->i2c, buff, count * 2);
 }
 
-static ssize_t write_freq(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len,
-                          uint16_t offset, uint8_t flags) {
+static int rda5807m_read_status_raw(struct rda5807m_radio *dev, uint16_t *status_a, uint16_t *status_b) {
+    uint8_t buff[4] = {0};
+
+    int ret = i2c_read_dt(&dev->i2c, buff, sizeof(buff));
+    if (ret) {
+        LOG_ERR("Status read failed: %d", ret);
+        return ret;
+    }
+
+    *status_a = ((uint16_t)buff[0] << 8) | buff[1];
+    *status_b = ((uint16_t)buff[2] << 8) | buff[3];
+    return 0;
+}
+
+static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms, uint16_t *status_a_out,
+                             uint16_t *status_b_out) {
+    uint16_t status_a;
+    uint16_t status_b;
+    uint32_t elapsed = 0;
+
+    while (elapsed < timeout_ms) {
+        k_msleep(RDA5807M_TUNE_POLL_MS);
+        elapsed += RDA5807M_TUNE_POLL_MS;
+
+        int ret = rda5807m_read_status_raw(dev, &status_a, &status_b);
+        if (ret) {
+            return ret;
+        }
+
+        if (status_a & RDA5807M_ST_STC) {
+            if (status_a_out) {
+                *status_a_out = status_a;
+            }
+            if (status_b_out) {
+                *status_b_out = status_b;
+            }
+            return 0;
+        }
+    }
+
+    LOG_WRN("STC timeout after %u ms", timeout_ms);
+    return -ETIMEDOUT;
+}
+
+static int rda5807m_set_frequency(struct rda5807m_radio *dev, uint32_t freq_khz) {
+    int ret = 0;
+
+    if (freq_khz < RDA5807M_FREQ_MIN_KHZ || freq_khz > RDA5807M_FREQ_MAX_KHZ) {
+        LOG_ERR("Frequency %u kHz out of range", freq_khz);
+        return -EINVAL;
+    }
+
+    freq_khz = (freq_khz / RDA5807M_FREQ_STEP_KHZ) * RDA5807M_FREQ_STEP_KHZ;
+    uint16_t channel = (freq_khz - RDA5807M_FREQ_BASE_KHZ) / RDA5807M_FREQ_STEP_KHZ;
+
+    k_mutex_lock(&dev->lock, K_FOREVER);
+
+    dev->shadow[SHADOW_CHANNEL] = (channel << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE |
+                                  RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
+
+    ret = rda5807m_write_regs(dev, 2);
+    if (ret) {
+        LOG_ERR("Frequency write failed: %d", ret);
+        goto out;
+    }
+
+    ret = rda5807m_wait_stc(dev, RDA5807M_TUNE_TIMEOUT_MS, nullptr, nullptr);
+    if (ret) {
+        goto out;
+    }
+
+    dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
+    ret = rda5807m_write_regs(dev, 2);
+    if (ret) {
+        goto out;
+    }
+
+    dev->frequency_khz = freq_khz;
+    LOG_INF("Tuned to %u kHz", freq_khz);
+
+out:
+    k_mutex_unlock(&dev->lock);
+    return ret;
+}
+
+static int rda5807m_set_volume(struct rda5807m_radio *dev, uint8_t vol) {
+    if (vol > RDA5807M_VOL_MAX) {
+        LOG_ERR("Volume %u out of range (max %u)", vol, RDA5807M_VOL_MAX);
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&dev->lock, K_FOREVER);
+    dev->shadow[SHADOW_VOLUME] = (dev->shadow[SHADOW_VOLUME] & ~RDA5807M_VOL_MASK) | vol;
+    int ret = rda5807m_write_regs(dev, 4);
+    if (ret) {
+        LOG_ERR("Volume write failed: %d", ret);
+    }
+    k_mutex_unlock(&dev->lock);
+    return ret;
+}
+
+static int rda5807m_set_mute(struct rda5807m_radio *dev, bool mute) {
+    k_mutex_lock(&dev->lock, K_FOREVER);
+
+    if (mute) {
+        dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_DMUTE;
+    } else {
+        dev->shadow[SHADOW_CONFIG] |= RDA5807M_CFG_DMUTE;
+    }
+
+    int ret = rda5807m_write_regs(dev, 1);
+    if (ret) {
+        LOG_ERR("Mute write failed: %d", ret);
+    }
+
+    k_mutex_unlock(&dev->lock);
+    return ret;
+}
+
+static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
+    uint16_t status_a = 0;
+    uint16_t status_b = 0;
+    uint16_t channel = 0;
+    int ret = 0;
+
+    k_mutex_lock(&dev->lock, K_FOREVER);
+
+    dev->shadow[SHADOW_CONFIG] |= RDA5807M_CFG_SEEK;
+    if (up) {
+        dev->shadow[SHADOW_CONFIG] |= RDA5807M_CFG_SEEKUP;
+    } else {
+        dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEKUP;
+    }
+
+    ret = rda5807m_write_regs(dev, 1);
+    if (ret) {
+        LOG_ERR("Seek write failed: %d", ret);
+        goto out;
+    }
+
+    ret = rda5807m_wait_stc(dev, RDA5807M_SEEK_TIMEOUT_MS, &status_a, &status_b);
+    if (ret) {
+        goto out;
+    }
+
+    if (status_a & RDA5807M_ST_SF) {
+        LOG_WRN("Seek failed - no station found");
+        ret = -EIO;
+        goto out;
+    }
+
+    channel = (status_a & RDA5807M_ST_READCHAN_MASK) >> RDA5807M_ST_READCHAN_SHIFT;
+    dev->frequency_khz = (channel * RDA5807M_FREQ_STEP_KHZ) + RDA5807M_FREQ_BASE_KHZ;
+    LOG_INF("Seek landed at %u kHz", dev->frequency_khz);
+
+    dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEK;
+    ret = rda5807m_write_regs(dev, 1);
+
+out:
+    k_mutex_unlock(&dev->lock);
+    return ret;
+}
+
+static int rda5807m_get_status(struct rda5807m_radio *dev, struct rda5807m_status *status) {
+    uint16_t sa, sb;
+
+    if (!status) {
+        return -EINVAL;
+    }
+
+    int ret = rda5807m_read_status_raw(dev, &sa, &sb);
+    if (ret) {
+        return ret;
+    }
+
+    status->frequency_khz = dev->frequency_khz;
+    status->rssi = (sb & RDA5807M_ST_RSSI_MASK) >> RDA5807M_ST_RSSI_SHIFT;
+    status->stereo = (sa & RDA5807M_ST_STEREO) != 0;
+    status->station = (sb & RDA5807M_ST_FM_TRUE) != 0;
+    status->seek_fail = (sa & RDA5807M_ST_SF) != 0;
+
+    return 0;
+}
+
+static int rda5807m_init(struct rda5807m_radio *dev) {
+    int ret = 0;
+
+    k_mutex_init(&dev->lock);
+
+    if (!i2c_is_ready_dt(&dev->i2c)) {
+        LOG_ERR("I2C bus not ready");
+        return -ENODEV;
+    }
+
+    dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE | RDA5807M_CFG_NEW_METHOD;
+    ret = rda5807m_write_regs(dev, 1);
+    if (ret) {
+        LOG_ERR("Reset write failed: %d", ret);
+        return ret;
+    }
+    k_msleep(RDA5807M_RESET_DELAY_MS);
+
+    dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE | RDA5807M_CFG_NEW_METHOD |
+                                 RDA5807M_CFG_ENABLE;
+    dev->shadow[SHADOW_CHANNEL] = RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
+    dev->shadow[SHADOW_VOLUME] = (RDA5807M_SEEKTH_DEFAULT << RDA5807M_SEEKTH_SHIFT) | 8U;
+
+    ret = rda5807m_write_regs(dev, 4);
+    if (ret) {
+        LOG_ERR("Init write failed: %d", ret);
+        return ret;
+    }
+
+    dev->frequency_khz = RDA5807M_FREQ_MIN_KHZ;
+    LOG_INF("RDA5807M initialized");
+    return 0;
+}
+
+static ssize_t read_freq(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
+                         uint16_t offset) {
+    uint32_t freq_be = __builtin_bswap32(radio.frequency_khz);
+    return bt_gatt_attr_read(nullptr, attr, buf, len, offset, &freq_be, sizeof(freq_be));
+}
+
+static ssize_t write_freq(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
+                          uint16_t, uint8_t) {
     if (len != sizeof(uint32_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
@@ -60,8 +317,7 @@ static ssize_t write_freq(struct bt_conn *conn, const struct bt_gatt_attr *attr,
     memcpy(&freq_be, buf, sizeof(freq_be));
     uint32_t freq_khz = __builtin_bswap32(freq_be);
 
-    int ret = rda5807m_set_frequency(radio, freq_khz);
-    if (ret) {
+    if (int ret = rda5807m_set_frequency(&radio, freq_khz); ret) {
         LOG_ERR("set_frequency(%u) failed: %d", freq_khz, ret);
         return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
     }
@@ -71,20 +327,20 @@ static ssize_t write_freq(struct bt_conn *conn, const struct bt_gatt_attr *attr,
     return len;
 }
 
-static ssize_t read_vol(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
+static ssize_t read_vol(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
                         uint16_t offset) {
-    return bt_gatt_attr_read(conn, attr, buf, len, offset, &current_vol, sizeof(current_vol));
+    return bt_gatt_attr_read(nullptr, attr, buf, len, offset, &current_vol, sizeof(current_vol));
 }
 
-static ssize_t write_vol(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len,
-                         uint16_t offset, uint8_t flags) {
+static ssize_t write_vol(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
+                         uint16_t, uint8_t) {
     if (len != sizeof(uint8_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    uint8_t vol = *static_cast<const uint8_t *>(buf);
-    int ret = rda5807m_set_volume(radio, vol);
-    if (ret) {
+    const uint8_t *bytes = static_cast<const uint8_t *>(buf);
+    uint8_t vol = bytes[0];
+    if (int ret = rda5807m_set_volume(&radio, vol); ret) {
         LOG_ERR("set_volume(%u) failed: %d", vol, ret);
         return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
     }
@@ -93,58 +349,51 @@ static ssize_t write_vol(struct bt_conn *conn, const struct bt_gatt_attr *attr, 
     return len;
 }
 
-static ssize_t write_seek(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len,
-                          uint16_t offset, uint8_t flags) {
+static ssize_t write_seek(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
+                          uint16_t, uint8_t) {
     if (len != sizeof(uint8_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    uint8_t dir = *static_cast<const uint8_t *>(buf);
+    const uint8_t *bytes = static_cast<const uint8_t *>(buf);
+    uint8_t dir = bytes[0];
     if (dir != 0x01 && dir != 0x02) {
         return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
     }
 
-    int ret = rda5807m_seek(radio, dir == 0x01);
-    if (ret == -EIO) {
+    if (int ret = rda5807m_seek(&radio, dir == 0x01); ret == -EIO) {
         LOG_WRN("Seek: no station found");
-        return len; /* Not fatal — client can read status to confirm */
+        return len;
     } else if (ret) {
         LOG_ERR("seek failed: %d", ret);
         return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
     }
 
-    /* Sync cached freq from driver after seek lands */
-    struct rda5807m_status status;
-    if (rda5807m_get_status(radio, &status) == 0) {
+    struct rda5807m_status status = {};
+    if (rda5807m_get_status(&radio, &status) == 0) {
         current_freq_khz = status.frequency_khz;
     }
 
     return len;
 }
 
-static ssize_t read_mute(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
+static ssize_t read_mute(struct bt_conn *, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
                          uint16_t offset) {
     uint8_t mute_byte = current_mute ? 1U : 0U;
-    return bt_gatt_attr_read(conn, attr, buf, len, offset, &mute_byte, sizeof(mute_byte));
+    return bt_gatt_attr_read(nullptr, attr, buf, len, offset, &mute_byte, sizeof(mute_byte));
 }
 
-static ssize_t write_mute(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len,
-                          uint16_t offset, uint8_t flags) {
+static ssize_t write_mute(struct bt_conn *, const struct bt_gatt_attr *, const void *buf, uint16_t len,
+                          uint16_t, uint8_t) {
     if (len != sizeof(uint8_t)) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    uint8_t val = *static_cast<const uint8_t *>(buf);
+    const uint8_t *bytes = static_cast<const uint8_t *>(buf);
+    uint8_t val = bytes[0];
+    bool new_mute = (val == 0xFF) ? !current_mute : (val != 0);
 
-    bool new_mute;
-    if (val == 0xFF) {
-        new_mute = !current_mute; /* Toggle */
-    } else {
-        new_mute = (val != 0);
-    }
-
-    int ret = rda5807m_set_mute(radio, new_mute);
-    if (ret) {
+    if (int ret = rda5807m_set_mute(&radio, new_mute); ret) {
         LOG_ERR("set_mute(%d) failed: %d", new_mute, ret);
         return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
     }
@@ -154,40 +403,36 @@ static ssize_t write_mute(struct bt_conn *conn, const struct bt_gatt_attr *attr,
     return len;
 }
 
-static void status_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value) {
+static void status_ccc_changed(const struct bt_gatt_attr *, uint16_t value) {
     status_notify_enabled = (value == BT_GATT_CCC_NOTIFY);
     LOG_INF("Status notifications %s", status_notify_enabled ? "enabled" : "disabled");
 }
 
-BT_GATT_SERVICE_DEFINE(fm_radio_svc, BT_GATT_PRIMARY_SERVICE(&uuid_fm_service),
-
+BT_GATT_SERVICE_DEFINE(fm_radio_svc,
+                       BT_GATT_PRIMARY_SERVICE(&uuid_fm_service),
                        BT_GATT_CHARACTERISTIC(&uuid_fm_freq.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
                                               BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_freq, write_freq, nullptr),
-
                        BT_GATT_CHARACTERISTIC(&uuid_fm_vol.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
                                               BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_vol, write_vol, nullptr),
-
                        BT_GATT_CHARACTERISTIC(&uuid_fm_seek.uuid, BT_GATT_CHRC_WRITE, BT_GATT_PERM_WRITE, nullptr,
                                               write_seek, nullptr),
-
                        BT_GATT_CHARACTERISTIC(&uuid_fm_mute.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
                                               BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, read_mute, write_mute, nullptr),
-
                        BT_GATT_CHARACTERISTIC(&uuid_fm_status.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE, nullptr,
                                               nullptr, nullptr),
-                       BT_GATT_CCC(status_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
+                       BT_GATT_CCC(status_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
 
-static const struct bt_data ad[] = {
+static const std::array<bt_data, 2> ad = {{
     BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR),
     BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_FM_SERVICE_VAL),
-};
+}};
 
-static const struct bt_data sd[] = {
+static const std::array<bt_data, 1> sd = {{
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
-};
+}};
 
 static int start_advertising() {
-    int ret = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    int ret = bt_le_adv_start(BT_LE_ADV_NCONN, ad.data(), ad.size(), sd.data(), sd.size());
     if (ret) {
         LOG_ERR("Advertising start failed: %d", ret);
     }
@@ -203,7 +448,7 @@ static void on_connected(struct bt_conn *conn, uint8_t err) {
     LOG_INF("BLE connected");
 }
 
-static void on_disconnected(struct bt_conn *conn, uint8_t reason) {
+static void on_disconnected(struct bt_conn *, uint8_t reason) {
     LOG_INF("BLE disconnected, reason 0x%02x", reason);
     if (active_conn) {
         bt_conn_unref(active_conn);
@@ -218,32 +463,13 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
     .disconnected = on_disconnected,
 };
 
-#define STATUS_NOTIFY_STACK  1024
-#define STATUS_NOTIFY_PRIO   K_PRIO_PREEMPT(7)
-#define STATUS_NOTIFY_PERIOD K_MSEC(2000)
+constexpr int STATUS_NOTIFY_STACK = 1024;
+constexpr int STATUS_NOTIFY_PRIO = K_PRIO_PREEMPT(7);
+constexpr k_timeout_t STATUS_NOTIFY_PERIOD = K_MSEC(2000);
 
 static void status_notify_thread_fn(void *, void *, void *) {
     while (true) {
         k_sleep(STATUS_NOTIFY_PERIOD);
-
-        if (!active_conn || !status_notify_enabled || !status_attr) {
-            continue;
-        }
-
-        struct rda5807m_status status;
-        if (rda5807m_get_status(radio, &status) != 0) {
-            continue;
-        }
-
-        struct status_payload payload = {
-            .rssi = status.rssi,
-            .stereo = status.stereo ? 1U : 0U,
-        };
-
-        int ret = bt_gatt_notify(nullptr, status_attr, &payload, sizeof(payload));
-        if (ret && ret != -ENOTCONN) {
-            LOG_WRN("Notify failed: %d", ret);
-        }
     }
 }
 
@@ -251,14 +477,22 @@ K_THREAD_DEFINE(status_notify_tid, STATUS_NOTIFY_STACK, status_notify_thread_fn,
                 STATUS_NOTIFY_PRIO, 0, 0);
 
 int main() {
-    if (!device_is_ready(radio)) {
-        LOG_ERR("RDA5807M not ready");
+    if (!device_is_ready(radio.i2c.bus)) {
+        LOG_ERR("RDA5807M I2C bus not ready");
         return -ENODEV;
+    }
+
+    current_freq_khz = radio.frequency_khz;
+
+    int ret = rda5807m_init(&radio);
+    if (ret) {
+        LOG_ERR("RDA5807M init failed: %d", ret);
+        return ret;
     }
 
     LOG_INF("RDA5807M ready");
 
-    int ret = rda5807m_set_frequency(radio, current_freq_khz);
+    ret = rda5807m_set_frequency(&radio, radio.frequency_khz);
     if (ret) {
         LOG_WRN("Initial tune failed: %d", ret);
     }
@@ -285,3 +519,4 @@ int main() {
     LOG_INF("Advertising as \"%s\"", CONFIG_BT_DEVICE_NAME);
     return 0;
 }
+
