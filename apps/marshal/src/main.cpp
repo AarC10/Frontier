@@ -21,7 +21,7 @@
 
 LOG_MODULE_REGISTER(marshal, CONFIG_LOG_DEFAULT_LEVEL);
 
-
+// GLOBALS
 static Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
 static Imu imu(DEVICE_DT_GET(DT_ALIAS(imu)));
 static VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)),
@@ -36,6 +36,7 @@ static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
 	logger.logImu(sample);
 }
 
+// BAROMETER THREAD
 #define BARO_STACK_SIZE 1024
 #define BARO_PRIORITY   4
 K_THREAD_STACK_DEFINE(baroStack, BARO_STACK_SIZE);
@@ -48,7 +49,7 @@ static void baroThreadEntry(void *, void *, void *) {
 	}
 }
 
-
+// VOLTAGE MONITOR THREAD
 #define VOLTAGE_STACK_SIZE 512
 #define VOLTAGE_PRIORITY   10
 K_THREAD_STACK_DEFINE(voltageStack, VOLTAGE_STACK_SIZE);
