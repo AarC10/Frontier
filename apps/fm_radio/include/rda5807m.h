@@ -32,14 +32,19 @@ extern "C" {
 
 #define RDA5807M_CFG_ENABLE         BIT(0)
 #define RDA5807M_CFG_SOFT_RESET     BIT(1)
-#define RDA5807M_CFG_NEW_METHOD     BIT(4)  /* Required for reliable operation */
+#define RDA5807M_CFG_NEW_METHOD     BIT(2)
 #define RDA5807M_CFG_RDS_EN         BIT(3)
-#define RDA5807M_CFG_CLK_32K        BIT(7)  /* Use 32.768kHz ref clock */
+#define RDA5807M_CFG_CLK_MODE_SHIFT 4
+#define RDA5807M_CFG_CLK_MODE_MASK  (0x7 << 4)
+#define RDA5807M_CFG_SKMODE         BIT(7)
 #define RDA5807M_CFG_SEEK           BIT(8)
-#define RDA5807M_CFG_SEEKUP         BIT(9)  /* 1=up, 0=down */
-#define RDA5807M_CFG_SKMODE         BIT(10) /* 0=wrap, 1=stop at limit */
-#define RDA5807M_CFG_DMUTE          BIT(14) /* 1=unmuted */
-#define RDA5807M_CFG_DHIZ           BIT(15) /* 1=audio output active */
+#define RDA5807M_CFG_SEEKUP         BIT(9)
+#define RDA5807M_CFG_RCLK_DIRECT    BIT(10)
+#define RDA5807M_CFG_RCLK_NON_CAL   BIT(11)
+#define RDA5807M_CFG_BASS           BIT(12)
+#define RDA5807M_CFG_MONO           BIT(13)
+#define RDA5807M_CFG_DMUTE          BIT(14)
+#define RDA5807M_CFG_DHIZ           BIT(15)
 
 /* REG 0x03 — Channel */
 #define RDA5807M_CHAN_SPACE_100K    (0x0 << 0)
@@ -60,7 +65,7 @@ extern "C" {
 #define RDA5807M_VOL_MAX            15
 #define RDA5807M_SEEKTH_SHIFT       8
 #define RDA5807M_SEEKTH_MASK        (0x0F << RDA5807M_SEEKTH_SHIFT)
-#define RDA5807M_SEEKTH_DEFAULT     8
+#define RDA5807M_SEEKTH_DEFAULT     2
 
 /* REG 0x0A — Read Status A */
 

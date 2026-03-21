@@ -69,21 +69,22 @@ static bool status_notify_enabled = false;
 static const struct bt_gatt_attr *status_attr = nullptr;
 
 static int rda5807m_write_regs(struct rda5807m_radio *dev, uint8_t count) {
-    uint8_t buff[RDA5807M_SHADOW_COUNT * 2] = {0};
-
     if (count > RDA5807M_SHADOW_COUNT) {
         return -EINVAL;
     }
 
+    uint8_t buff[RDA5807M_SHADOW_COUNT * 2] = {0};
+
     for (int i = 0; i < count; i++) {
-        buff[i * 2] = (dev->shadow[i] >> 8) & 0xFF;
-        buff[i * 2 + 1] = dev->shadow[i] & 0xFF;
+        buff[i * 2]     = (dev->shadow[i] >> 8) & 0xFF;
+        buff[i * 2 + 1] =  dev->shadow[i]       & 0xFF;
     }
 
     return i2c_write_dt(&dev->i2c, buff, count * 2);
 }
 
-static int rda5807m_read_status_raw(struct rda5807m_radio *dev, uint16_t *status_a, uint16_t *status_b) {
+static int rda5807m_read_status_raw(struct rda5807m_radio *dev,
+                                     uint16_t *status_a, uint16_t *status_b) {
     uint8_t buff[4] = {0};
 
     int ret = i2c_read_dt(&dev->i2c, buff, sizeof(buff));
@@ -97,8 +98,8 @@ static int rda5807m_read_status_raw(struct rda5807m_radio *dev, uint16_t *status
     return 0;
 }
 
-static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms, uint16_t *status_a_out,
-                             uint16_t *status_b_out) {
+static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms,
+                              uint16_t *status_a_out, uint16_t *status_b_out) {
     uint16_t status_a;
     uint16_t status_b;
     uint32_t elapsed = 0;
@@ -112,18 +113,23 @@ static int rda5807m_wait_stc(struct rda5807m_radio *dev, uint32_t timeout_ms, ui
             return ret;
         }
 
+        /* Log first few polls to see what chip is reporting */
+        if (elapsed <= 50) {
+            LOG_INF("Poll %u ms: 0x0A=0x%04X 0x0B=0x%04X STC=%d SF=%d",
+                    elapsed, status_a, status_b,
+                    (status_a & RDA5807M_ST_STC) != 0,
+                    (status_a & RDA5807M_ST_SF) != 0);
+        }
+
         if (status_a & RDA5807M_ST_STC) {
-            if (status_a_out) {
-                *status_a_out = status_a;
-            }
-            if (status_b_out) {
-                *status_b_out = status_b;
-            }
+            if (status_a_out) *status_a_out = status_a;
+            if (status_b_out) *status_b_out = status_b;
             return 0;
         }
     }
 
-    LOG_WRN("STC timeout after %u ms", timeout_ms);
+    LOG_WRN("STC timeout after %u ms — last: 0x0A=0x%04X 0x0B=0x%04X",
+            timeout_ms, status_a, status_b);
     return -ETIMEDOUT;
 }
 
@@ -146,24 +152,37 @@ static int rda5807m_set_frequency(struct rda5807m_radio *dev, uint32_t freq_khz)
     ret = rda5807m_write_regs(dev, 2);
     if (ret) {
         LOG_ERR("Frequency write failed: %d", ret);
-        goto out;
+        goto cleanup;
     }
 
     ret = rda5807m_wait_stc(dev, RDA5807M_TUNE_TIMEOUT_MS, nullptr, nullptr);
-    if (ret) {
-        goto out;
-    }
-
-    dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
-    ret = rda5807m_write_regs(dev, 2);
-    if (ret) {
-        goto out;
+    if (ret == -ETIMEDOUT) {
+        LOG_WRN("Tune timed out, resetting chip");
+        dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE; /* clear BEFORE restore write */
+        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE |
+                                     RDA5807M_CFG_NEW_METHOD;
+        rda5807m_write_regs(dev, 1);
+        k_msleep(50);
+        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE |
+                                     RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
+        rda5807m_write_regs(dev, 4); /* now safe — TUNE already cleared in shadow */
+        goto cleanup;
+    } else if (ret) {
+        goto cleanup;
     }
 
     dev->frequency_khz = freq_khz;
     LOG_INF("Tuned to %u kHz", freq_khz);
 
-out:
+    cleanup:
+        /* Always clear TUNE bit — leaving it set prevents subsequent tunes */
+        dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
+    int write_ret = rda5807m_write_regs(dev, 2);
+    if (write_ret) {
+        LOG_ERR("TUNE bit clear failed: %d", write_ret);
+        ret = write_ret;
+    }
+
     k_mutex_unlock(&dev->lock);
     return ret;
 }
@@ -223,7 +242,19 @@ static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
     }
 
     ret = rda5807m_wait_stc(dev, RDA5807M_SEEK_TIMEOUT_MS, &status_a, &status_b);
-    if (ret) {
+    if (ret == -ETIMEDOUT) {
+        // Soft reset to cleanly recover while chip is seekin
+        LOG_WRN("Seek timed out, resetting chip");
+        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE |
+                                     RDA5807M_CFG_NEW_METHOD;
+        rda5807m_write_regs(dev, 1);
+        k_msleep(50);
+        // Restore
+        dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE |
+                                     RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
+        rda5807m_write_regs(dev, 4);
+        goto cleanup;
+    } else if (ret) {
         goto cleanup;
     }
 
@@ -515,6 +546,14 @@ int main() {
     }
 
     LOG_INF("RDA5807M ready");
+
+    k_msleep(500);
+    ret = rda5807m_set_frequency(&radio, 96500U); /* WCMF */
+    if (ret) {
+        LOG_WRN("Tune to 96.5 failed: %d", ret);
+    } else {
+        LOG_INF("Tuned to 96.5 — do you hear audio?");
+    }
 
     k_msleep(500);
 
