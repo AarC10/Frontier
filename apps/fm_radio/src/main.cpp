@@ -548,11 +548,11 @@ int main() {
     LOG_INF("RDA5807M ready");
 
     k_msleep(500);
-    ret = rda5807m_set_frequency(&radio, 96500U); /* WCMF */
+    ret = rda5807m_set_frequency(&radio, 89700U);
     if (ret) {
-        LOG_WRN("Tune to 96.5 failed: %d", ret);
+        LOG_WRN("Tune to 89.7 failed: %d", ret);
     } else {
-        LOG_INF("Tuned to 96.5 — do you hear audio?");
+        LOG_INF("Tuned to 89.7 — do you hear audio?");
     }
 
     k_msleep(500);

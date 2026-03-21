@@ -93,7 +93,7 @@ extern "C" {
 
 
 struct rda5807m_status {
-    uint16_t frequency_khz;
+    uint32_t frequency_khz;
     uint8_t  rssi;          /* 0–127 */
     bool     stereo;
     bool     station;       /* FM_TRUE bit — tuned to actual station */
