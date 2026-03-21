@@ -25,10 +25,10 @@ LOG_MODULE_REGISTER(fm_tuner, LOG_LEVEL_INF);
 #define BT_UUID_FM_STATUS_VAL  BT_UUID_128_ENCODE(0x12345678, 0x0005, 0x1000, 0x8000, 0x00805F9B34FB)
 
 #define RDA5807M_SHADOW_COUNT       6
-#define RDA5807M_TUNE_TIMEOUT_MS    200
+#define RDA5807M_TUNE_TIMEOUT_MS    1000
 #define RDA5807M_TUNE_POLL_MS       10
 #define RDA5807M_SEEK_TIMEOUT_MS    5000
-#define RDA5807M_RESET_DELAY_MS     50
+#define RDA5807M_RESET_DELAY_MS     150
 #define RDA5807M_I2C_ADDR           0x10
 
 #define SHADOW_CONFIG   0
@@ -432,7 +432,7 @@ static const std::array<bt_data, 1> sd = {{
 }};
 
 static int start_advertising() {
-    int ret = bt_le_adv_start(BT_LE_ADV_NCONN, ad.data(), ad.size(), sd.data(), sd.size());
+    int ret = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad.data(), ad.size(), sd.data(), sd.size());
     if (ret) {
         LOG_ERR("Advertising start failed: %d", ret);
     }
@@ -470,6 +470,28 @@ constexpr k_timeout_t STATUS_NOTIFY_PERIOD = K_MSEC(2000);
 static void status_notify_thread_fn(void *, void *, void *) {
     while (true) {
         k_sleep(STATUS_NOTIFY_PERIOD);
+
+        if (!active_conn || !status_notify_enabled || !status_attr) {
+            continue;
+        }
+
+        struct rda5807m_status status = {};
+        if (rda5807m_get_status(&radio, &status) != 0) {
+            continue;
+        }
+
+        struct __packed {
+            uint8_t rssi;
+            uint8_t stereo;
+        } payload = {
+            .rssi   = status.rssi,
+            .stereo = static_cast<uint8_t>(status.stereo ? 1U : 0U),
+        };
+
+        int ret = bt_gatt_notify(nullptr, status_attr, &payload, sizeof(payload));
+        if (ret && ret != -ENOTCONN) {
+            LOG_WRN("Notify failed: %d", ret);
+        }
     }
 }
 
@@ -492,9 +514,11 @@ int main() {
 
     LOG_INF("RDA5807M ready");
 
+    k_msleep(500);
+
     ret = rda5807m_set_frequency(&radio, radio.frequency_khz);
     if (ret) {
-        LOG_WRN("Initial tune failed: %d", ret);
+        LOG_WRN("Initial tune failed, continuing: %d", ret);
     }
 
     ret = bt_enable(nullptr);
