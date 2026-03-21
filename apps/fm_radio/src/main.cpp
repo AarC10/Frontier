@@ -243,16 +243,23 @@ static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
 
     ret = rda5807m_wait_stc(dev, RDA5807M_SEEK_TIMEOUT_MS, &status_a, &status_b);
     if (ret == -ETIMEDOUT) {
-        // Soft reset to cleanly recover while chip is seekin
         LOG_WRN("Seek timed out, resetting chip");
         dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_SOFT_RESET | RDA5807M_CFG_ENABLE |
                                      RDA5807M_CFG_NEW_METHOD;
         rda5807m_write_regs(dev, 1);
         k_msleep(50);
-        // Restore
         dev->shadow[SHADOW_CONFIG] = RDA5807M_CFG_DHIZ | RDA5807M_CFG_DMUTE |
                                      RDA5807M_CFG_NEW_METHOD | RDA5807M_CFG_ENABLE;
         rda5807m_write_regs(dev, 4);
+
+        uint16_t ch = (dev->frequency_khz - RDA5807M_FREQ_BASE_KHZ) / RDA5807M_FREQ_STEP_KHZ;
+        dev->shadow[SHADOW_CHANNEL] = (ch << RDA5807M_CHAN_SHIFT) | RDA5807M_CHAN_TUNE |
+                                      RDA5807M_CHAN_BAND_87108 | RDA5807M_CHAN_SPACE_100K;
+        rda5807m_write_regs(dev, 2);
+        k_msleep(50);
+        dev->shadow[SHADOW_CHANNEL] &= ~RDA5807M_CHAN_TUNE;
+        rda5807m_write_regs(dev, 2);
+
         goto cleanup;
     } else if (ret) {
         goto cleanup;
@@ -547,21 +554,6 @@ int main() {
 
     LOG_INF("RDA5807M ready");
 
-    k_msleep(500);
-    ret = rda5807m_set_frequency(&radio, 89700U);
-    if (ret) {
-        LOG_WRN("Tune to 89.7 failed: %d", ret);
-    } else {
-        LOG_INF("Tuned to 89.7 — do you hear audio?");
-    }
-
-    k_msleep(500);
-
-    ret = rda5807m_set_frequency(&radio, radio.frequency_khz);
-    if (ret) {
-        LOG_WRN("Initial tune failed, continuing: %d", ret);
-    }
-
     ret = bt_enable(nullptr);
     if (ret) {
         LOG_ERR("BT enable failed: %d", ret);
@@ -584,4 +576,3 @@ int main() {
     LOG_INF("Advertising as \"%s\"", CONFIG_BT_DEVICE_NAME);
     return 0;
 }
-
