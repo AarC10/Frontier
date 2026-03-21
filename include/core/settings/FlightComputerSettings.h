@@ -16,24 +16,26 @@ enum class DeployMode : uint8_t {
 };
 
 constexpr DeployMode DEFAULT_DEPLOY_MODE = DeployMode::DUAL_DEPLOY;
-constexpr uint16_t DEFAULT_MAIN_DEPLOY_ALT_M = 152; // 500 ft AGL
-constexpr uint16_t DEFAULT_ARMING_ALT_M = 30;       // 100 ft — launch detect threshold
-constexpr uint16_t DEFAULT_APOGEE_DELAY_MS = 0;     // fire drogue immediately at apogee
-constexpr uint16_t DEFAULT_MIN_BATTERY_MV = 3300;   // 3.3 V lockout
+constexpr uint16_t DEFAULT_MAIN_DEPLOY_ALT_FT = 500; // ft AGL
+constexpr uint16_t DEFAULT_ARMING_ALT_FT = 100;      // ft — launch detect threshold
+constexpr uint16_t DEFAULT_APOGEE_DELAY_MS = 0;      // fire drogue immediately at apogee
+constexpr uint16_t DEFAULT_MIN_BATTERY_MV = 3300;    // 3.3 V lockout
 constexpr uint32_t DEFAULT_FLIGHT_COUNTER = 0;
+constexpr float FT_TO_M = 0.3048f;
 
 int load();
 DeployMode deployMode();
-uint16_t mainDeployAltM();
-uint16_t armingAltM();
+uint16_t mainDeployAltFt();
+uint16_t armingAltFt();
 uint16_t apogeeDelayMs();
 uint16_t minBatteryMv();
 uint32_t flightCounter();
 int setDeployMode(DeployMode mode);
-int setMainDeployAltM(uint16_t altMeters);
-int setArmingAltM(uint16_t altMeters);
+int setMainDeployAltFt(uint16_t altFeet);
+int setArmingAltFt(uint16_t altFeet);
 int setApogeeDelayMs(uint16_t delayMs);
 int setMinBatteryMv(uint16_t mv);
 uint32_t incrementFlightCounter();
-
+float mainDeployAltM();
+float armingAltM();
 } // namespace FlightComputerSettings
