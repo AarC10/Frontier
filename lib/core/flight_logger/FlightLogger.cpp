@@ -62,7 +62,6 @@ int FlightLogger::init() {
     int ret = scanForWritePointer();
     if (ret != 0) {
         LOG_ERR("Write pointer scan failed: %d", ret);
-        flash_area_close(flashArea);
         flashArea = nullptr;
         return ret;
     }
