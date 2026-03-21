@@ -18,6 +18,9 @@
 ## Buzzer
 - [ ] Can drive buzzer
 
+## LEDs
+- [ ] Can drive LEDs correctly. PA15 LED turns on when powered without any firmware on them
+
 # Software Testing
 ## Sensors
 - [ ] LSM6DSV configured for 16Gs
