@@ -205,7 +205,6 @@ static int rda5807m_set_mute(struct rda5807m_radio *dev, bool mute) {
 static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
     uint16_t status_a = 0;
     uint16_t status_b = 0;
-    uint16_t channel = 0;
     int ret = 0;
 
     k_mutex_lock(&dev->lock, K_FOREVER);
@@ -220,34 +219,31 @@ static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
     ret = rda5807m_write_regs(dev, 1);
     if (ret) {
         LOG_ERR("Seek write failed: %d", ret);
-        goto out;
+        goto cleanup;
     }
 
     ret = rda5807m_wait_stc(dev, RDA5807M_SEEK_TIMEOUT_MS, &status_a, &status_b);
     if (ret) {
-        goto out;
+        goto cleanup;
     }
 
     if (status_a & RDA5807M_ST_SF) {
         LOG_WRN("Seek failed - no station found");
         ret = -EIO;
+    } else {
+        uint16_t channel = (status_a & RDA5807M_ST_READCHAN_MASK) >> RDA5807M_ST_READCHAN_SHIFT;
+        dev->frequency_khz = ((uint32_t)channel * RDA5807M_FREQ_STEP_KHZ) + RDA5807M_FREQ_BASE_KHZ;
+        LOG_INF("Seek landed at %u kHz", dev->frequency_khz);
     }
 
-    dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEK;
-    rda5807m_write_regs(dev, 1);
-
-    if (ret == -EIO) {
-        goto out;
+    cleanup:
+        dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEK;
+    int write_ret = rda5807m_write_regs(dev, 1);
+    if (write_ret) {
+        LOG_ERR("SEEK bit clear failed: %d", write_ret);
+        ret = write_ret;
     }
 
-    channel = (status_a & RDA5807M_ST_READCHAN_MASK) >> RDA5807M_ST_READCHAN_SHIFT;
-    dev->frequency_khz = (channel * RDA5807M_FREQ_STEP_KHZ) + RDA5807M_FREQ_BASE_KHZ;
-    LOG_INF("Seek landed at %u kHz", dev->frequency_khz);
-
-    dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEK;
-    ret = rda5807m_write_regs(dev, 1);
-
-out:
     k_mutex_unlock(&dev->lock);
     return ret;
 }
