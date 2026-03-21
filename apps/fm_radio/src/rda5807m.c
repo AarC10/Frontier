@@ -10,7 +10,7 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(rda5807m, CONFIG_RDA5807M_LOG_LEVEL);
+LOG_MODULE_REGISTER(RDA5807M);
 
 #define RDA5807M_SHADOW_COUNT       6   /* Regs 0x02–0x07 */
 #define RDA5807M_TUNE_TIMEOUT_MS    200
