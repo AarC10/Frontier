@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(marshal, CONFIG_LOG_DEFAULT_LEVEL);
 static Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
 static Imu imu(DEVICE_DT_GET(DT_ALIAS(imu)));
 static VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVICE_DT_GET(DT_ALIAS(vcc_sensor)));
-static FlightLogger logger(FIXED_PARTITION_ID(raw_partition));
+static FlightLogger logger(PARTITION(raw_partition));
 static bool armed = false;
 
 static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
@@ -57,9 +57,6 @@ static k_thread voltageThread;
 static void voltageThreadEntry(void *, void *, void *) {
     while (true) {
         voltageMonitor.sample();
-
-        // TODO: add rawVbat()/rawVcc() to VoltageMonitor for true
-        // 12-bit ADC values. Using mV as placeholder.
         logger.logVoltage(static_cast<uint16_t>(voltageMonitor.vbatMv()), static_cast<uint16_t>(voltageMonitor.vccMv()),
                           0, 0 // TODO: read pyro ILM channels
         );
@@ -111,8 +108,6 @@ int main() {
     ret = logger.init();
     if (ret != 0) {
         LOG_ERR("Flight logger init failed: %d", ret);
-        // technically non fatal so rocket can still fly...
-        // Maybe make this a setting to fail completely if you cant log?
         // TODO: set a fault LED / buzzer pattern here.
     }
 

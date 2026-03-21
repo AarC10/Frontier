@@ -21,7 +21,7 @@
 // Write pointer walks from the start of raw partition
 class FlightLogger {
   public:
-    explicit FlightLogger(uint8_t partitionId);
+    explicit FlightLogger(const flash_area *partition);
 
     FlightLogger(const FlightLogger &) = delete;
     FlightLogger &operator=(const FlightLogger &) = delete;

@@ -45,22 +45,21 @@ static inline int16_t tempToCentiDeg(const sensor_value &sv) {
     return static_cast<int16_t>(cdeg);
 }
 
-FlightLogger::FlightLogger(uint8_t partitionId) : partId(partitionId), writerStack{}, writerThread() {
+FlightLogger::FlightLogger(const flash_area *partition) : flashArea(partition), writerStack{}, writerThread() {
     k_msgq_init(&msgq, msgqBuffer, FlightLog::MAX_RECORD_SIZE, MSGQ_DEPTH);
     memset(pageBuffer, 0xFF, PAGE_SIZE);
 }
 
 int FlightLogger::init() {
-    int ret = flash_area_open(partId, &flashArea);
-    if (ret != 0) {
-        LOG_ERR("Failed to open raw log partition: %d", ret);
-        return ret;
+    if (flashArea == nullptr) {
+        LOG_ERR("Null partition pointer");
+        return -EINVAL;
     }
 
     partSize = flashArea->fa_size;
     LOG_INF("Raw log partition: %u bytes (%u KB)", partSize, partSize / 1024);
 
-    ret = scanForWritePointer();
+    int ret = scanForWritePointer();
     if (ret != 0) {
         LOG_ERR("Write pointer scan failed: %d", ret);
         flash_area_close(flashArea);
