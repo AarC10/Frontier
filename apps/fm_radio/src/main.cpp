@@ -231,6 +231,12 @@ static int rda5807m_seek(struct rda5807m_radio *dev, bool up) {
     if (status_a & RDA5807M_ST_SF) {
         LOG_WRN("Seek failed - no station found");
         ret = -EIO;
+    }
+
+    dev->shadow[SHADOW_CONFIG] &= ~RDA5807M_CFG_SEEK;
+    rda5807m_write_regs(dev, 1);
+
+    if (ret == -EIO) {
         goto out;
     }
 
