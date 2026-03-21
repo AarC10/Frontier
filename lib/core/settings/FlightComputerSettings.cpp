@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "core/FlightComputerSettings.h"
+#include "core/settings/FlightComputerSettings.h"
 
 #include <cstdlib>
 #include <cstring>

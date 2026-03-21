@@ -9,6 +9,7 @@
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
+#include <core/settings/FlightComputerSettings.h>
 #include <utility>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
@@ -67,7 +68,12 @@ static void voltageThreadEntry(void *, void *, void *) {
 }
 
 int main() {
-    int ret = barometer.init();
+    int ret = FlightComputerSettings::load();
+    if (ret != 0) {
+        LOG_ERR("Failed to load settings: %d", ret);
+    }
+
+    ret = barometer.init();
     if (ret != 0) {
         LOG_ERR("Barometer init failed: %d", ret);
     }
