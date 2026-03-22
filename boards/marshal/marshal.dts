@@ -4,6 +4,7 @@
 #include <st/g4/stm32g474c(b-c-e)tx-pinctrl.dtsi>
 #include <zephyr/dt-bindings/adc/adc.h>
 #include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/sensor/lsm6dsv16x.h>
 
 / {
 	model = "Marshal Flight Computer";
@@ -178,10 +179,16 @@
 		compatible = "st,lsm6dsv16x";
 		reg = <1>;
 		spi-max-frequency = <DT_FREQ_M(10)>;
+
+		accel-odr = <LSM6DSVXXX_DT_ODR_AT_240Hz>;
+    	gyro-odr = <LSM6DSVXXX_DT_ODR_AT_240Hz>;
+
 		drdy-pin = <1>;
 		drdy-pulsed;
+
 		int1-gpios = <&gpioc 14 GPIO_ACTIVE_HIGH>;
 		int2-gpios = <&gpioc 15 GPIO_ACTIVE_HIGH>;
+
 		status = "okay";
 	};
 };
