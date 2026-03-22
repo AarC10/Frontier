@@ -93,7 +93,8 @@
 	};
 
 	aliases {
-		led0 = &led0;
+		led = &led0;
+		buzzer = &buzzer;
 		barometer = &ms5611;
 		imu = &lsm6dsv16x;
 		dbg-uart = &usart2;
