@@ -6,6 +6,7 @@
 #include <core/flight/FlightStateMachine.h>
 // #include <core/flight_logger/FlightExporter.h>
 // #include <core/flight_logger/FlightLogger.h>
+#include <cmath>
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
@@ -39,7 +40,9 @@ static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
 #define BARO_PRIORITY   4
 K_THREAD_STACK_DEFINE(baroStack, BARO_STACK_SIZE);
 static k_thread baroThread;
-
+float pressureKPaToAltitudeM(float pressureKPa) {
+    return 44330.0f * (1.0f - std::pow(pressureKPa / 101.325f, 1.0f / 5.255f));
+}
 static void baroThreadEntry(void *, void *, void *) {
     while (true) {
         const BaroSample sample = barometer.sample();
@@ -83,6 +86,15 @@ static bool checkBatteryVoltage() {
 
 
 int main() {
+    const struct flash_area *fa;
+    flash_area_open(FIXED_PARTITION_ID(nvs_partition), &fa);
+    printk("Flash area size: %zu\n", fa->fa_size);
+
+    struct flash_sector sector;
+    uint32_t cnt = 1;
+    flash_area_get_sectors(FIXED_PARTITION_ID(nvs_partition), &cnt, &sector);
+    printk("Sector size: %zu\n", sector.fs_size);
+
     int ret = FlightComputerSettings::load();
     if (ret != 0) {
         LOG_ERR("Failed to load settings: %d", ret);
