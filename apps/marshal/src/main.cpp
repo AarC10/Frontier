@@ -32,6 +32,9 @@ static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
     ARG_UNUSED(trig);
 
     const ImuSample sample = imu.sample();
+    LOG_INF("X: %f, Y: %f, Z: %f mg | X: %f, Y: %f, Z: %f dps", sensor_value_to_float(&sample.accelX), sensor_value_to_float(&sample.accelY), sensor_value_to_float(&sample.accelZ),
+            sensor_value_to_float(&sample.gyroX), sensor_value_to_float(&sample.gyroY), sensor_value_to_float(&sample.gyroZ));
+
     // logger.logImu(sample);
 }
 
