@@ -80,82 +80,79 @@ static bool checkBatteryVoltage() {
     return true;
 }
 
+
+
 int main() {
-    printk("Works!");
+    int ret = FlightComputerSettings::load();
+    if (ret != 0) {
+        LOG_ERR("Failed to load settings: %d", ret);
+    }
+
+    ret = barometer.init();
+    if (ret != 0) {
+        LOG_ERR("Barometer init failed: %d", ret);
+    }
+
+    ret = imu.init(imuDataReadyHandler);
+    if (ret != 0) {
+        LOG_ERR("IMU init failed: %d", ret);
+    }
+
+    ret = voltageMonitor.init();
+    if (ret != 0) {
+        LOG_ERR("Voltage monitor init failed: %d", ret);
+    }
+
+    // Battery lockout and refuse to arm if voltage is too low
+    armed = checkBatteryVoltage();
+
+    // Init flight logger
+    // ret = logger.init();
+    // if (ret != 0) {
+    //     LOG_ERR("Flight logger init failed: %d", ret);
+    //     // TODO: set a fault LED / buzzer pattern here.
+    // }
+
+    // Init FSM
+    static FlightStateMachine fsm(barometer, imu);
+
+    // TODO: feed FlightComputerSettings::armingAltM() and mainDeployAltM() into the FSM
+
+    // fsm.onStateChange([](FlightState oldState, FlightState newState) {
+    //     logger.logStateChange(static_cast<uint8_t>(oldState), static_cast<uint8_t>(newState));
+    //
+    //     if (newState == FlightState::BOOST && armed) {
+    //         const uint32_t id = FlightComputerSettings::incrementFlightCounter();
+    //         logger.startFlight(id, 100, 25);
+    //         LOG_INF("Flight %u logging started", id);
+    //     }
+    //
+    //     if (newState == FlightState::LANDED) {
+    //         logger.endFlight();
+    //     }
+    //
+    //     // TODO: PyroController logic
+    //     // DUAL_DEPLOY:
+    //     //   APOGEE: delay(apogeeDelayMs) → fire CH1 (drogue)
+    //     //   DESCENT: altitude < mainDeployAltFt → fire CH2 (main)
+    //     //
+    //     // DROGUE_ONLY:
+    //     //   APOGEE: delay(apogeeDelayMs) → fire CH1 (drogue)
+    //     //
+    //     // MAIN_ONLY:
+    //     //   APOGEE: fire CH2 (main)
+    // });
+
+    // Start background threads
+    k_thread_create(&baroThread, baroStack, BARO_STACK_SIZE, baroThreadEntry, nullptr, nullptr, nullptr, BARO_PRIORITY,
+                    0, K_NO_WAIT);
+
+    k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
+                    VOLTAGE_PRIORITY, 0, K_NO_WAIT);
+
+    // LOG_INF("READY: armed=%s mode=%u main_alt=%u ft log=%u/%u bytes", armed ? "YES" : "NO",
+    //         static_cast<unsigned>(FlightComputerSettings::deployMode()), FlightComputerSettings::mainDeployAltFt(),
+    //         logger.writeOffset(), logger.partitionSize());
+
     return 0;
 }
-
-// int main() {
-//     int ret = FlightComputerSettings::load();
-//     if (ret != 0) {
-//         LOG_ERR("Failed to load settings: %d", ret);
-//     }
-//
-//     ret = barometer.init();
-//     if (ret != 0) {
-//         LOG_ERR("Barometer init failed: %d", ret);
-//     }
-//
-//     ret = imu.init(imuDataReadyHandler);
-//     if (ret != 0) {
-//         LOG_ERR("IMU init failed: %d", ret);
-//     }
-//
-//     ret = voltageMonitor.init();
-//     if (ret != 0) {
-//         LOG_ERR("Voltage monitor init failed: %d", ret);
-//     }
-//
-//     // Battery lockout and refuse to arm if voltage is too low
-//     armed = checkBatteryVoltage();
-//
-//     // Init flight logger
-//     ret = logger.init();
-//     if (ret != 0) {
-//         LOG_ERR("Flight logger init failed: %d", ret);
-//         // TODO: set a fault LED / buzzer pattern here.
-//     }
-//
-//     // Init FSM
-//     static FlightStateMachine fsm(barometer, imu);
-//
-//     // TODO: feed FlightComputerSettings::armingAltM() and mainDeployAltM() into the FSM
-//
-//     fsm.onStateChange([](FlightState oldState, FlightState newState) {
-//         logger.logStateChange(static_cast<uint8_t>(oldState), static_cast<uint8_t>(newState));
-//
-//         if (newState == FlightState::BOOST && armed) {
-//             const uint32_t id = FlightComputerSettings::incrementFlightCounter();
-//             logger.startFlight(id, 100, 25);
-//             LOG_INF("Flight %u logging started", id);
-//         }
-//
-//         if (newState == FlightState::LANDED) {
-//             logger.endFlight();
-//         }
-//
-//         // TODO: PyroController logic
-//         // DUAL_DEPLOY:
-//         //   APOGEE: delay(apogeeDelayMs) → fire CH1 (drogue)
-//         //   DESCENT: altitude < mainDeployAltFt → fire CH2 (main)
-//         //
-//         // DROGUE_ONLY:
-//         //   APOGEE: delay(apogeeDelayMs) → fire CH1 (drogue)
-//         //
-//         // MAIN_ONLY:
-//         //   APOGEE: fire CH2 (main)
-//     });
-//
-//     // Start background threads
-//     k_thread_create(&baroThread, baroStack, BARO_STACK_SIZE, baroThreadEntry, nullptr, nullptr, nullptr, BARO_PRIORITY,
-//                     0, K_NO_WAIT);
-//
-//     k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
-//                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
-//
-//     LOG_INF("READY: armed=%s mode=%u main_alt=%u ft log=%u/%u bytes", armed ? "YES" : "NO",
-//             static_cast<unsigned>(FlightComputerSettings::deployMode()), FlightComputerSettings::mainDeployAltFt(),
-//             logger.writeOffset(), logger.partitionSize());
-//
-//     return 0;
-// }
