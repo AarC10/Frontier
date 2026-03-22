@@ -22,8 +22,13 @@
 		compatible = "gpio-leds";
 
 		led0: led_0 {
-			gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpioa 15 GPIO_ACTIVE_HIGH>;
 			label = "Status LED";
+		};
+
+		buzzer: buzzer {
+			gpios = <&gpiob 2 GPIO_ACTIVE_HIGH>;
+			label = "Buzzer Enable";
 		};
 	};
 
@@ -151,8 +156,8 @@
 &spi1 {
 	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa7>;
 	pinctrl-names = "default";
-	cs-gpios = <&gpiob 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>,
-		   <&gpioa 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	cs-gpios = <&gpiob 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>,
+		   <&gpiob 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 	status = "okay";
 
 	ms5611: ms5611@0 {
@@ -217,8 +222,8 @@
 	};
 };
 
-&usart1 {
-	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+&usart2 {
+	pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pa3>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
 	status = "okay";
@@ -235,7 +240,7 @@
 };
 
 &adc1 {
-	pinctrl-0 = <&adc1_in1_pa0 &adc1_in2_pa1 &adc1_in3_pa2 &adc1_in4_pa3>;
+	pinctrl-0 = <&adc1_in1_pa0 &adc1_in2_pa1>;
 	pinctrl-names = "default";
 	st,adc-clock-source = "SYNC";
 	st,adc-prescaler = <4>;
@@ -261,8 +266,19 @@
 		zephyr,resolution = <12>;
 		zephyr,vref-mv = <3300>;
 	};
+};
 
-	pyro1_ilm: channel@3 {
+&adc5 {
+	pinctrl-0 = <&adc5_in1_pa8 &adc5_in2_pa9>;
+	pinctrl-names = "default";
+	st,adc-clock-source = "SYNC";
+	st,adc-prescaler = <4>;
+	status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	pyro1_ilm: channel@1 {
 		reg = <3>;
 		zephyr,gain = "ADC_GAIN_1";
 		zephyr,reference = "ADC_REF_INTERNAL";
@@ -271,7 +287,7 @@
 		zephyr,vref-mv = <3300>;
 	};
 
-	pyro2_ilm: channel@4 {
+	pyro2_ilm: channel@2 {
 		reg = <4>;
 		zephyr,gain = "ADC_GAIN_1";
 		zephyr,reference = "ADC_REF_INTERNAL";
