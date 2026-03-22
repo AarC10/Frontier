@@ -1,7 +1,7 @@
 # Hardware Bringup
 ## Sensors
-- [ ] Reading MS5611 over SPI 
-- [ ] Reading LSMDSV over SPI
+- [X] Reading MS5611 over SPI 
+- [X] Reading LSMDSV over SPI
 - [ ] Reading ADC for VBATT and 3V3
 
 ## USB-C
@@ -23,9 +23,9 @@
 
 # Software Testing
 ## Sensors
-- [ ] LSM6DSV configured for 16Gs
-- [ ] LSM6DSV interrupts working
-- [ ] MS5611 reading pressure and temperature
+- [X] LSM6DSV configured for 16Gs
+- [X] LSM6DSV interrupts working
+- [X] MS5611 reading pressure and temperature
 - [ ] Valid readings from ADC for VBATT and 3V3
 
 ## Storage
@@ -44,5 +44,5 @@
 - [ ] Success tone for armed pyros
 
 ## Shell
-- [ ] Expose capabilities for Dispatch
-- [ ] Configurable deployments
+- [X] Expose capabilities for Dispatch
+- [X] Configurable deployments
