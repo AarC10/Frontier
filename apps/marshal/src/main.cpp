@@ -4,14 +4,14 @@
  */
 
 #include <core/flight/FlightStateMachine.h>
-#include <core/flight_logger/FlightExporter.h>
-#include <core/flight_logger/FlightLogger.h>
+// #include <core/flight_logger/FlightExporter.h>
+// #include <core/flight_logger/FlightLogger.h>
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
-#include <core/settings/FlightComputerSettings.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/gpio.h>
+// #include <core/settings/FlightComputerSettings.h>
+// #include <zephyr/device.h>
+// #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
@@ -23,7 +23,7 @@ LOG_MODULE_REGISTER(marshal, CONFIG_LOG_DEFAULT_LEVEL);
 static Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
 static Imu imu(DEVICE_DT_GET(DT_ALIAS(imu)));
 static VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVICE_DT_GET(DT_ALIAS(vcc_sensor)));
-static FlightLogger logger(PARTITION(raw_partition));
+// static FlightLogger logger(PARTITION(raw_partition));
 static bool armed = false;
 
 // SENSOR READERS
@@ -32,7 +32,7 @@ static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
     ARG_UNUSED(trig);
 
     const ImuSample sample = imu.sample();
-    logger.logImu(sample);
+    // logger.logImu(sample);
 }
 
 #define BARO_STACK_SIZE 1024
@@ -43,7 +43,7 @@ static k_thread baroThread;
 static void baroThreadEntry(void *, void *, void *) {
     while (true) {
         const BaroSample sample = barometer.sample();
-        logger.logBaro(sample);
+        // logger.logBaro(sample);
         k_sleep(K_MSEC(40)); // 25 Hz
     }
 }
@@ -57,9 +57,9 @@ static k_thread voltageThread;
 static void voltageThreadEntry(void *, void *, void *) {
     while (true) {
         voltageMonitor.sample();
-        logger.logVoltage(static_cast<uint16_t>(voltageMonitor.vbatMv()), static_cast<uint16_t>(voltageMonitor.vccMv()),
-                          0, 0 // TODO: read pyro ILM channels
-        );
+        // logger.logVoltage(static_cast<uint16_t>(voltageMonitor.vbatMv()), static_cast<uint16_t>(voltageMonitor.vccMv()),
+                          // 0, 0 // TODO: read pyro ILM channels
+        // );
 
         k_sleep(K_MSEC(1000)); // 1 Hz
     }
@@ -68,20 +68,20 @@ static void voltageThreadEntry(void *, void *, void *) {
 static bool checkBatteryVoltage() {
     voltageMonitor.sample();
     const uint16_t vbat = static_cast<uint16_t>(voltageMonitor.vbatMv());
-    const uint16_t threshold = FlightComputerSettings::minBatteryMv();
+    // const uint16_t threshold = FlightComputerSettings::minBatteryMv();
+    //
+    // if (vbat < threshold) {
+    //     LOG_ERR("Battery voltage %u mV below lockout threshold %u mV — NOT ARMING", vbat, threshold);
+    //     // TODO: signal error here
+    //     return false;
+    // }
 
-    if (vbat < threshold) {
-        LOG_ERR("Battery voltage %u mV below lockout threshold %u mV — NOT ARMING", vbat, threshold);
-        // TODO: signal error here
-        return false;
-    }
-
-    LOG_INF("Battery voltage OK: %u mV (threshold %u mV)", vbat, threshold);
+    // LOG_INF("Battery voltage OK: %u mV (threshold %u mV)", vbat, threshold);
     return true;
 }
 
 int main() {
-    printk("Fuck you");
+    printk("Works!");
     return 0;
 }
 

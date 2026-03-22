@@ -63,7 +63,7 @@
 		partition = <&fat_partition>;
 		disk-name = "marshal";
 		cache-size = <4096>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	fstab {
