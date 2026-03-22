@@ -12,9 +12,6 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/flash_map.h>
 
-#ifdef CONFIG_FAT_FILESYSTEM_ELM
-#include <ff.h>
-#endif
 
 #ifdef CONFIG_SHELL
 #include <zephyr/shell/shell.h>
@@ -23,32 +20,76 @@
 LOG_MODULE_REGISTER(FlightExporter);
 
 static constexpr size_t COPY_BUF_SIZE = 512;
-static const char *const FAT_MOUNT = "/fat";
+static const char *const FAT_MOUNT = "/export";
 
-#ifdef CONFIG_FAT_FILESYSTEM_ELM
-static FATFS fatFs;
+static uint8_t __aligned(4) fatFsData[1024];
 static struct fs_mount_t fatMnt = {
 	.type = FS_FATFS,
 	.mnt_point = FAT_MOUNT,
-	.fs_data = &fatFs,
+	.fs_data = &fatFsData,
 };
-#endif
-
 
 FlightExporter::FlightExporter(const flash_area *rawPartition,
 			       const flash_area *fatPartition)
 	: rawFa(rawPartition), fatFa(fatPartition) {}
 
 int FlightExporter::init() {
-	return mountOrFormat();
+	struct fs_statvfs stat;
+	int ret = fs_statvfs(FAT_MOUNT, &stat);
+	if (ret == 0) {
+		mounted = true;
+		LOG_INF("FAT mounted at %s", FAT_MOUNT);
+		return 0;
+	}
+	LOG_ERR("FAT not mounted at %s: %d", FAT_MOUNT, ret);
+	return ret;
 }
 
 int FlightExporter::mountOrFormat() {
+	int ret = fs_mount(&fatMnt);
+	if (ret == 0) {
+		mounted = true;
+		LOG_INF("FAT partition mounted at %s", FAT_MOUNT);
+		return 0;
+	}
 
+	LOG_WRN("FAT mount failed (%d), formatting...", ret);
+	return formatAndMount();
 }
 
 int FlightExporter::formatAndMount() {
+	if (fatFa == nullptr) {
+		return -EINVAL;
+	}
 
+	// Unmount first if somehow mounted
+	if (mounted) {
+		fs_unmount(&fatMnt);
+		mounted = false;
+	}
+
+	LOG_INF("Erasing FAT partition (%u bytes)", fatFa->fa_size);
+	int ret = flash_area_erase(fatFa, 0, fatFa->fa_size);
+	if (ret != 0) {
+		LOG_ERR("FAT erase failed: %d", ret);
+		return ret;
+	}
+
+	ret = fs_mkfs(FS_FATFS, reinterpret_cast<uintptr_t>("MARSHAL"), nullptr, 0);
+	if (ret != 0) {
+		LOG_ERR("fs_mkfs failed: %d", ret);
+		return ret;
+	}
+
+	ret = fs_mount(&fatMnt);
+	if (ret != 0) {
+		LOG_ERR("FAT mount after format failed: %d", ret);
+		return ret;
+	}
+
+	mounted = true;
+	LOG_INF("FAT partition formatted and mounted at %s", FAT_MOUNT);
+	return 0;
 }
 
 int FlightExporter::format() {
@@ -56,11 +97,101 @@ int FlightExporter::format() {
 }
 
 int FlightExporter::scanFlights() {
+	if (rawFa == nullptr) {
+		return -EINVAL;
+	}
 
+	numFlights = 0;
+	uint32_t offset = 0;
+	const uint32_t partSize = rawFa->fa_size;
+	int currentFlight = -1;
+
+	while (offset < partSize) {
+		uint8_t probe[2];
+		int ret = flash_area_read(rawFa, offset, probe, 2);
+		if (ret != 0) {
+			LOG_ERR("Flash read error at 0x%08X: %d", offset, ret);
+			return ret;
+		}
+
+		if (probe[0] == 0xFF) {
+			break;
+		}
+
+		if (probe[0] != FlightLog::RECORD_MAGIC) {
+			LOG_WRN("Corruption at 0x%08X, stopping scan", offset);
+			break;
+		}
+
+		const uint8_t typeByte = probe[1];
+		const size_t recSize = FlightLog::recordSizeFromRaw(typeByte);
+		if (recSize == 0) {
+			LOG_WRN("Unknown type 0x%02X at 0x%08X, stopping scan",
+				typeByte, offset);
+			break;
+		}
+
+		if (offset + recSize > partSize) {
+			break;
+		}
+
+		const auto type = static_cast<FlightLog::RecordType>(typeByte);
+
+		if (type == FlightLog::RecordType::FLIGHT_HEADER) {
+			FlightLog::FlightHeaderRecord hdr{};
+			ret = flash_area_read(rawFa, offset, &hdr, sizeof(hdr));
+			if (ret != 0) {
+				LOG_ERR("Failed to read flight header at 0x%08X", offset);
+				break;
+			}
+
+			if (currentFlight >= 0) {
+				flightList[currentFlight].endOffset = offset;
+			}
+
+			if (numFlights >= MAX_FLIGHTS) {
+				LOG_WRN("Max flights (%zu) reached, stopping scan",
+					MAX_FLIGHTS);
+				break;
+			}
+
+			currentFlight = static_cast<int>(numFlights);
+			FlightInfo &info = flightList[numFlights];
+			info.flightId = hdr.flightId;
+			info.startOffset = offset;
+			info.endOffset = 0;
+			info.epochUptimeMs = hdr.epochUptimeMillis;
+			info.recordCount = 0;
+			info.hasFlightEnd = false;
+			numFlights++;
+		}
+
+		if (type == FlightLog::RecordType::FLIGHT_END && currentFlight >= 0) {
+			flightList[currentFlight].hasFlightEnd = true;
+		}
+
+		if (currentFlight >= 0) {
+			flightList[currentFlight].recordCount++;
+		}
+
+		offset += recSize;
+	}
+
+	if (currentFlight >= 0 && flightList[currentFlight].endOffset == 0) {
+		flightList[currentFlight].endOffset = offset;
+	}
+
+	LOG_INF("Scan complete: %zu flight(s) found", numFlights);
+	return static_cast<int>(numFlights);
 }
 
 const FlightExporter::FlightInfo *FlightExporter::findFlight(uint32_t flightId) const {
-	
+	for (size_t i = 0; i < numFlights; i++) {
+		if (flightList[i].flightId == flightId) {
+			return &flightList[i];
+		}
+	}
+	return nullptr;
 }
 
 void FlightExporter::buildFilename(char *buf, size_t bufLen, uint32_t flightId) {
@@ -72,23 +203,167 @@ bool FlightExporter::fileExists(const char *path) {
 	return fs_stat(path, &entry) == 0;
 }
 
-// ──────────────────── Raw -> file copy ──────────────────────────────
-
 int FlightExporter::copyFlightToFile(const FlightInfo &flight,
 				     const char *filename) {
+	const uint32_t size = flight.endOffset - flight.startOffset;
 
+	struct fs_file_t file;
+	fs_file_t_init(&file);
+
+	int ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE);
+	if (ret != 0) {
+		LOG_ERR("Failed to create %s: %d", filename, ret);
+		return ret;
+	}
+
+	uint8_t buf[COPY_BUF_SIZE];
+	uint32_t remaining = size;
+	uint32_t offset = flight.startOffset;
+
+	while (remaining > 0) {
+		const size_t chunk = (remaining > COPY_BUF_SIZE)
+			? COPY_BUF_SIZE : remaining;
+
+		ret = flash_area_read(rawFa, offset, buf, chunk);
+		if (ret != 0) {
+			LOG_ERR("Flash read failed at 0x%08X: %d", offset, ret);
+			fs_close(&file);
+			return ret;
+		}
+
+		ssize_t written = fs_write(&file, buf, chunk);
+		if (written < 0) {
+			LOG_ERR("File write failed: %zd", written);
+			fs_close(&file);
+			return static_cast<int>(written);
+		}
+
+		offset += chunk;
+		remaining -= chunk;
+	}
+
+	fs_close(&file);
+	LOG_INF("Exported flight %u: %u bytes -> %s",
+		flight.flightId, size, filename);
+	return 0;
 }
 
 int FlightExporter::exportFlight(uint32_t flightId) {
+	if (!mounted) {
+		LOG_ERR("FAT not mounted");
+		return -ENODEV;
+	}
 
+	const FlightInfo *info = findFlight(flightId);
+	if (info == nullptr) {
+		LOG_ERR("Flight %u not found", flightId);
+		return -ENOENT;
+	}
+
+	char filename[32];
+	buildFilename(filename, sizeof(filename), flightId);
+
+	if (fileExists(filename)) {
+		LOG_INF("Flight %u already exported (%s), skipping", flightId, filename);
+		return -EEXIST;
+	}
+
+	return copyFlightToFile(*info, filename);
 }
 
 int FlightExporter::exportAll() {
+	if (!mounted) {
+		LOG_ERR("FAT not mounted");
+		return -ENODEV;
+	}
+
+	if (numFlights == 0) {
+		LOG_WRN("No flights to export");
+		return 0;
+	}
+
+	int exported = 0;
+	for (size_t i = 0; i < numFlights; i++) {
+		char filename[32];
+		buildFilename(filename, sizeof(filename), flightList[i].flightId);
+
+		if (fileExists(filename)) {
+			LOG_INF("Flight %u already exported, skipping",
+				flightList[i].flightId);
+			continue;
+		}
+
+		int ret = copyFlightToFile(flightList[i], filename);
+		if (ret != 0) {
+			LOG_ERR("Failed to export flight %u: %d",
+				flightList[i].flightId, ret);
+			continue;
+		}
+		exported++;
+	}
+
+	LOG_INF("Exported %d new flight(s) (%zu total on partition)",
+		exported, numFlights);
+	return exported;
 }
 
+int FlightExporter::exportLatest() {
+	int ret = scanFlights();
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (numFlights == 0) {
+		return -ENOENT;
+	}
+
+	// The last flight in the list is the most recent
+	const FlightInfo &latest = flightList[numFlights - 1];
+	return exportFlight(latest.flightId);
+}
 
 int FlightExporter::clearExports() {
+	if (!mounted) {
+		LOG_ERR("FAT not mounted");
+		return -ENODEV;
+	}
 
+	struct fs_dir_t dir;
+	fs_dir_t_init(&dir);
+
+	int ret = fs_opendir(&dir, FAT_MOUNT);
+	if (ret != 0) {
+		LOG_ERR("Failed to open %s: %d", FAT_MOUNT, ret);
+		return ret;
+	}
+
+	int deleted = 0;
+	struct fs_dirent entry;
+
+	while (fs_readdir(&dir, &entry) == 0 && entry.name[0] != '\0') {
+		// Only delete .BIN files
+		const size_t len = strlen(entry.name);
+		if (len < 4) continue;
+
+		const char *ext = &entry.name[len - 4];
+		if (strcmp(ext, ".BIN") != 0 && strcmp(ext, ".bin") != 0) {
+			continue;
+		}
+
+		char path[48];
+		snprintf(path, sizeof(path), "%s/%s", FAT_MOUNT, entry.name);
+
+		ret = fs_unlink(path);
+		if (ret == 0) {
+			deleted++;
+		} else {
+			LOG_WRN("Failed to delete %s: %d", path, ret);
+		}
+	}
+
+	fs_closedir(&dir);
+	LOG_INF("Deleted %d file(s)", deleted);
+	return 0;
 }
 
 #ifdef CONFIG_SHELL
@@ -159,7 +434,7 @@ static int cmdExport(const struct shell *sh, size_t argc, char **argv) {
 		return -EINVAL;
 	}
 
-	shell_print(sh, "Exporting flight %lu...", id);
+	shell_print(sh, "Exporting flight %lu", id);
 	ret = shellExporter->exportFlight(static_cast<uint32_t>(id));
 
 	if (ret == 0) {
@@ -187,7 +462,7 @@ static int cmdExportAll(const struct shell *sh, size_t argc, char **argv) {
 		return ret;
 	}
 
-	shell_print(sh, "Exporting %zu flight(s)...", shellExporter->flightCount());
+	shell_print(sh, "Exporting %zu flight(s)", shellExporter->flightCount());
 	ret = shellExporter->exportAll();
 
 	if (ret >= 0) {
@@ -225,7 +500,7 @@ static int cmdFormat(const struct shell *sh, size_t argc, char **argv) {
 		return -EINVAL;
 	}
 
-	shell_print(sh, "Formatting FAT partition...");
+	shell_print(sh, "Formatting FAT partition");
 	int ret = shellExporter->format();
 	if (ret == 0) {
 		shell_print(sh, "Format complete.");
