@@ -86,15 +86,6 @@ static bool checkBatteryVoltage() {
 
 
 int main() {
-    const struct flash_area *fa;
-    flash_area_open(FIXED_PARTITION_ID(nvs_partition), &fa);
-    printk("Flash area size: %zu\n", fa->fa_size);
-
-    struct flash_sector sector;
-    uint32_t cnt = 1;
-    flash_area_get_sectors(FIXED_PARTITION_ID(nvs_partition), &cnt, &sector);
-    printk("Sector size: %zu\n", sector.fs_size);
-
     int ret = FlightComputerSettings::load();
     if (ret != 0) {
         LOG_ERR("Failed to load settings: %d", ret);

@@ -13,7 +13,7 @@
 - [ ] Blowing
 
 ## Storage
-- [ ] Can R/W to W25Q128
+- [X] Can R/W to W25Q128
 
 ## Buzzer
 - [ ] Can drive buzzer
