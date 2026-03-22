@@ -29,22 +29,22 @@
 
 	pyro: pyro {
 		stm_ch1_en: stm_ch1_en {
-			gpios = <&gpiob 3 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpiob 9 GPIO_ACTIVE_HIGH>;
 			label = "STM-CH1-EN";
 		};
 
 		stm_ch2_en: stm_ch2_en {
-			gpios = <&gpiob 4 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpiob 7 GPIO_ACTIVE_HIGH>;
 			label = "STM-CH2-EN";
 		};
 
 		flt1: flt1 {
-			gpios = <&gpiob 0 GPIO_ACTIVE_LOW>;
+			gpios = <&gpioc 13 GPIO_ACTIVE_LOW>;
 			label = "FLT1";
 		};
 
 		flt2: flt2 {
-			gpios = <&gpiob 1 GPIO_ACTIVE_LOW>;
+			gpios = <&gpioa 4 GPIO_ACTIVE_LOW>;
 			label = "FLT2";
 		};
 	};
@@ -135,9 +135,13 @@
 };
 
 &ucpd1 {
-	// Disabled PB6/PB4 are used by sensor IRQ/pyro enable.
-	status = "disabled";
+	psc-ucpdclk = <1>;
+	hbitclkdiv = <27>;
+	pinctrl-0 = <&ucpd1_cc1_pb6 &ucpd1_cc2_pb4>;
+	pinctrl-names = "default";
+	status = "okay";
 };
+
 
 &spi1 {
 	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa7>;
@@ -159,8 +163,8 @@
 		spi-max-frequency = <DT_FREQ_M(10)>;
 		drdy-pin = <1>;
 		drdy-pulsed;
-		int1-gpios = <&gpiob 6 GPIO_ACTIVE_HIGH>;
-		int2-gpios = <&gpiob 7 GPIO_ACTIVE_HIGH>;
+		int1-gpios = <&gpioc 14 GPIO_ACTIVE_HIGH>;
+		int2-gpios = <&gpioc 15 GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 };
