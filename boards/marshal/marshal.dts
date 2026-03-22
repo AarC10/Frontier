@@ -10,8 +10,8 @@
 	compatible = "wildwest,marshal";
 
 	chosen {
-		zephyr,console = &cdc_acm_uart0;
-		zephyr,shell-uart = &cdc_acm_uart0;
+		zephyr,console = &usart2;
+		zephyr,shell-uart = &usart2;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 
@@ -95,7 +95,7 @@
 		led0 = &led0;
 		barometer = &ms5611;
 		imu = &lsm6dsv16x;
-		dbg-uart = &usart1;
+		dbg-uart = &usart2;
 		stm-ch1-en = &stm_ch1_en;
 		stm-ch2-en = &stm_ch2_en;
 		flt1 = &flt1;
@@ -117,31 +117,38 @@
 	status = "okay";
 };
 
-&clk_hsi {
-	clock-frequency = <DT_FREQ_M(16)>;
-	status = "okay";
-};
-
 &clk_hsi48 {
 	status = "okay";
 };
 
+//&crs {
+//    clocks = <&clk_hsi48>;
+//    clock-frequency = <DT_FREQ_M(48)>;
+//    sync-src = <STM32_CRS_SYNC_SRC_USB>;
+//    status = "okay";
+//};
+
+//&clk_hsi {
+//    clock-frequency = <DT_FREQ_M(16)>;
+//    status = "okay";
+//};
+
 &pll {
-	div-m = <1>;
-	mul-n = <12>;
-	div-p = <2>;
-	div-q = <2>;
-	div-r = <2>;
-	clocks = <&clk_hse>;
-	status = "okay";
+    div-m = <2>;
+    mul-n = <20>;
+    div-p = <2>;
+    div-q = <2>;
+    div-r = <2>;
+    clocks = <&clk_hse>;
+    status = "okay";
 };
 
 &rcc {
-	clocks = <&pll>;
-	clock-frequency = <DT_FREQ_M(48)>;
-	ahb-prescaler = <2>;
-	apb1-prescaler = <1>;
-	apb2-prescaler = <1>;
+    clocks = <&pll>;
+    clock-frequency = <DT_FREQ_M(80)>;
+    ahb-prescaler = <1>;
+    apb1-prescaler = <1>;
+    apb2-prescaler = <1>;
 };
 
 &ucpd1 {
@@ -192,7 +199,7 @@
 		size = <DT_SIZE_M(128)>;
         jedec-id = [ef 40 18];
 
-		wp-gpios = <&gpioa 15 GPIO_ACTIVE_LOW>;
+		wp-gpios = <&gpioa 10 GPIO_ACTIVE_LOW>;
 		reset-gpios = <&gpiob 10 GPIO_ACTIVE_LOW>;
 		status = "okay";
 
@@ -279,7 +286,7 @@
 	#size-cells = <0>;
 
 	pyro1_ilm: channel@1 {
-		reg = <3>;
+		reg = <1>;
 		zephyr,gain = "ADC_GAIN_1";
 		zephyr,reference = "ADC_REF_INTERNAL";
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
@@ -288,7 +295,7 @@
 	};
 
 	pyro2_ilm: channel@2 {
-		reg = <4>;
+		reg = <2>;
 		zephyr,gain = "ADC_GAIN_1";
 		zephyr,reference = "ADC_REF_INTERNAL";
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
