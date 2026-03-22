@@ -9,9 +9,9 @@
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
-// #include <core/settings/FlightComputerSettings.h>
-// #include <zephyr/device.h>
-// #include <zephyr/drivers/gpio.h>
+#include <core/settings/FlightComputerSettings.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
@@ -68,15 +68,15 @@ static void voltageThreadEntry(void *, void *, void *) {
 static bool checkBatteryVoltage() {
     voltageMonitor.sample();
     const uint16_t vbat = static_cast<uint16_t>(voltageMonitor.vbatMv());
-    // const uint16_t threshold = FlightComputerSettings::minBatteryMv();
-    //
-    // if (vbat < threshold) {
-    //     LOG_ERR("Battery voltage %u mV below lockout threshold %u mV — NOT ARMING", vbat, threshold);
-    //     // TODO: signal error here
-    //     return false;
-    // }
+    const uint16_t threshold = FlightComputerSettings::minBatteryMv();
 
-    // LOG_INF("Battery voltage OK: %u mV (threshold %u mV)", vbat, threshold);
+    if (vbat < threshold) {
+        LOG_ERR("Battery voltage %u mV below lockout threshold %u mV — NOT ARMING", vbat, threshold);
+        // TODO: signal error here
+        return false;
+    }
+
+    LOG_INF("Battery voltage OK: %u mV (threshold %u mV)", vbat, threshold);
     return true;
 }
 
