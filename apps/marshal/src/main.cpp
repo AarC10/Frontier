@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <core/Settings.h>
 #include <core/flight/FlightStateMachine.h>
-#include <core/flight_logger/FlightLogger.h>
 #include <core/flight_logger/FlightExporter.h>
+#include <core/flight_logger/FlightLogger.h>
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
 #include <core/settings/FlightComputerSettings.h>
-#include <utility>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
@@ -28,6 +26,7 @@ static VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVIC
 static FlightLogger logger(PARTITION(raw_partition));
 static bool armed = false;
 
+// SENSOR READERS
 static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
     ARG_UNUSED(dev);
     ARG_UNUSED(trig);

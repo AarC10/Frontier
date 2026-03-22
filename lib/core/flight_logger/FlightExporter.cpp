@@ -86,7 +86,6 @@ int FlightExporter::formatAndMount() {
 		LOG_ERR("FAT mount after format failed: %d", ret);
 		return ret;
 	}
-
 	mounted = true;
 	LOG_INF("FAT partition formatted and mounted at %s", FAT_MOUNT);
 	return 0;
