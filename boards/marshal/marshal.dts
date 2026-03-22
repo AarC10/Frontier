@@ -112,14 +112,19 @@
 	status = "okay";
 };
 
+&clk_hsi {
+	clock-frequency = <DT_FREQ_M(16)>;
+	status = "okay";
+};
+
 &clk_hsi48 {
 	status = "okay";
 };
 
 &pll {
-	div-m = <4>;
-	mul-n = <85>;
-	div-p = <7>;
+	div-m = <1>;
+	mul-n = <12>;
+	div-p = <2>;
 	div-q = <2>;
 	div-r = <2>;
 	clocks = <&clk_hse>;
@@ -128,8 +133,8 @@
 
 &rcc {
 	clocks = <&pll>;
-	clock-frequency = <DT_FREQ_M(170)>;
-	ahb-prescaler = <1>;
+	clock-frequency = <DT_FREQ_M(48)>;
+	ahb-prescaler = <2>;
 	apb1-prescaler = <1>;
 	apb2-prescaler = <1>;
 };
