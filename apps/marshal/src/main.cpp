@@ -7,6 +7,8 @@
 // #include <core/flight_logger/FlightExporter.h>
 // #include <core/flight_logger/FlightLogger.h>
 #include <cmath>
+#include <core/io/Buzzer.h>
+#include <core/io/Led.h>
 #include <core/sensors/Barometer.h>
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
@@ -27,8 +29,10 @@ static VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVIC
 // static FlightLogger logger(PARTITION(raw_partition));
 static bool armed = false;
 
-static gpio_dt_spec statusLed = GPIO_DT_SPEC_GET(DT_ALIAS(led), gpios);
-static gpio_dt_spec buzzer = GPIO_DT_SPEC_GET(DT_ALIAS(buzzer), gpios);
+static gpio_dt_spec statusLedSpec = GPIO_DT_SPEC_GET(DT_ALIAS(led), gpios);
+static gpio_dt_spec buzzerSpec = GPIO_DT_SPEC_GET(DT_ALIAS(buzzer), gpios);
+static Led statusLed(&statusLedSpec);
+static Buzzer buzzer(&buzzerSpec);
 
 // SENSOR READERS
 static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
@@ -122,25 +126,18 @@ int main() {
     //     // TODO: set a fault LED / buzzer pattern here.
     // }
 
+    ret = statusLed.init();
+    if (ret != 0) {
+        LOG_ERR("Status LED init failed: %d", ret);
+    }
+
+    ret = buzzer.init();
+    if (ret != 0) {
+        LOG_ERR("Buzzer init failed: %d", ret);
+    }
+
     // Init FSM
     static FlightStateMachine fsm(barometer, imu);
-    gpio_pin_configure_dt(&statusLed, GPIO_OUTPUT_INACTIVE);
-    gpio_pin_configure_dt(&buzzer, GPIO_OUTPUT_INACTIVE);
-    // int counter = 0;
-    // while (true) {
-    //     counter++;
-    //
-    //     if (counter == 5) {
-    //         gpio_pin_set_dt(&buzzer, 1);
-    //     } else if (counter == 6) {
-    //         gpio_pin_set_dt(&buzzer, 0);
-    //         counter = 0;
-    //     }
-    //
-    //     gpio_pin_toggle_dt(&statusLed);
-    //     k_sleep(K_MSEC(1000));
-    //     printk("counter %d\n", counter);
-    // }
 
     // TODO: feed FlightComputerSettings::armingAltM() and mainDeployAltM() into the FSM
 
