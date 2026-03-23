@@ -48,6 +48,12 @@ config CORE_SENSORS
   help
     Build sensor abstractions for core sensors like barometers and IMUs.
 
+config CORE_IO
+  bool "Core IO"
+  default n
+  help
+    Build LED and Buzzer GPIO output abstractions.
+
 
 config LICENSED_FREQUENCY
   bool "Licensed Frequency"
