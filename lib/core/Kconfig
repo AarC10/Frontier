@@ -54,6 +54,13 @@ config CORE_IO
   help
     Build LED and Buzzer GPIO output abstractions.
 
+config CORE_PYRO
+  bool "Core Pyro Controller"
+  default n
+  help
+    Build pyrotechnic channel controller support for arming, firing, and
+    fault-sensing of pyro output channels.
+
 
 config LICENSED_FREQUENCY
   bool "Licensed Frequency"
