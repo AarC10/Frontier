@@ -4,8 +4,8 @@
  */
 
 #include <core/flight/FlightStateMachine.h>
-// #include <core/flight_logger/FlightExporter.h>
-// #include <core/flight_logger/FlightLogger.h>
+#include <core/flight_logger/FlightExporter.h>
+#include <core/flight_logger/FlightLogger.h>
 #include <cmath>
 #include <core/io/Buzzer.h>
 #include <core/io/Led.h>
@@ -20,7 +20,7 @@
 #include <zephyr/logging/log_ctrl.h>
 #include <zephyr/storage/flash_map.h>
 
-LOG_MODULE_REGISTER(marshal, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(marshal, LOG_LEVEL_INF);
 
 // GLOBALS
 static Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
@@ -71,8 +71,8 @@ static void voltageThreadEntry(void *, void *, void *) {
                           // 0, 0 // TODO: read pyro ILM channels
         // );
 
-        LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", static_cast<uint16_t>(voltageMonitor.vbatMv()),
-                static_cast<uint16_t>(voltageMonitor.vccMv()));
+        // LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", static_cast<uint16_t>(voltageMonitor.vbatMv()),
+        //         static_cast<uint16_t>(voltageMonitor.vccMv()));
 
         k_sleep(K_MSEC(1000)); // 1 Hz
     }

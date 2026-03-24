@@ -17,7 +17,7 @@
 #include <zephyr/shell/shell.h>
 #endif
 
-LOG_MODULE_REGISTER(FlightExporter);
+LOG_MODULE_REGISTER(FlightExporter, LOG_LEVEL_INF);
 
 static constexpr size_t COPY_BUF_SIZE = 512;
 static const char *const FAT_MOUNT = "/export";
