@@ -12,7 +12,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(FlightLogger, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(FlightLogger, LOG_LEVEL_INF);
 
 static inline float svToFloat(const sensor_value &sv) {
     return static_cast<float>(sv.val1) + static_cast<float>(sv.val2) / 1000000.0f;
