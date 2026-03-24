@@ -17,3 +17,5 @@ add_subdirectory_ifdef(CONFIG_CORE_SENSORS sensors)
 add_subdirectory_ifdef(CONFIG_CORE_IO io)
 
 add_subdirectory_ifdef(CONFIG_CORE_SETTINGS settings)
+
+add_subdirectory_ifdef(CONFIG_CORE_PYRO pyro)
