@@ -36,13 +36,13 @@ static Led statusLed(&statusLedSpec);
 static Buzzer buzzer(&buzzerSpec);
 
 // USB
-USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x0483, 0x5740);
-USBD_DESC_LANG_DEFINE(marshal_lang);
-USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
-USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
-USBD_DESC_SERIAL_NUMBER_DEFINE(marshal_sn);
-USBD_DESC_CONFIG_DEFINE(marshal_fs_cfg, "FS Config");
-USBD_CONFIGURATION_DEFINE(marshal_fs_config, USB_SCD_SELF_POWERED, 125, &marshal_fs_cfg);
+// USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x0483, 0x5740);
+// USBD_DESC_LANG_DEFINE(marshal_lang);
+// USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
+// USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
+// USBD_DESC_SERIAL_NUMBER_DEFINE(marshal_sn);
+// USBD_DESC_CONFIG_DEFINE(marshal_fs_cfg, "FS Config");
+// USBD_CONFIGURATION_DEFINE(marshal_fs_config, USB_SCD_SELF_POWERED, 125, &marshal_fs_cfg);
 
 // SENSOR READERS
 static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
@@ -104,14 +104,14 @@ static bool checkBatteryVoltage() {
 }
 
 static void init_usb() {
-    usbd_add_descriptor(&marshal_usbd, &marshal_lang);
-    usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
-    usbd_add_descriptor(&marshal_usbd, &marshal_product);
-    usbd_add_descriptor(&marshal_usbd, &marshal_sn);
-    usbd_add_configuration(&marshal_usbd, USBD_SPEED_FS, &marshal_fs_config);
-    usbd_register_all_classes(&marshal_usbd, USBD_SPEED_FS, 1, NULL);
-    usbd_init(&marshal_usbd);
-    usbd_enable(&marshal_usbd);
+    // usbd_add_descriptor(&marshal_usbd, &marshal_lang);
+    // usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
+    // usbd_add_descriptor(&marshal_usbd, &marshal_product);
+    // usbd_add_descriptor(&marshal_usbd, &marshal_sn);
+    // usbd_add_configuration(&marshal_usbd, USBD_SPEED_FS, &marshal_fs_config);
+    // usbd_register_all_classes(&marshal_usbd, USBD_SPEED_FS, 1, NULL);
+    // usbd_init(&marshal_usbd);
+    // usbd_enable(&marshal_usbd);
 }
 
 int main() {
