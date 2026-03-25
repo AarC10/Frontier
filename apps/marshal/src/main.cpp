@@ -19,6 +19,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
 #include <zephyr/storage/flash_map.h>
+#include <zephyr/usb/usbd.h>
 
 LOG_MODULE_REGISTER(marshal, LOG_LEVEL_INF);
 
@@ -33,6 +34,15 @@ static gpio_dt_spec statusLedSpec = GPIO_DT_SPEC_GET(DT_ALIAS(led), gpios);
 static gpio_dt_spec buzzerSpec = GPIO_DT_SPEC_GET(DT_ALIAS(buzzer), gpios);
 static Led statusLed(&statusLedSpec);
 static Buzzer buzzer(&buzzerSpec);
+
+// USB
+USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x2FE3, 0x0001);
+USBD_DESC_LANG_DEFINE(marshal_lang);
+USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
+USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
+USBD_DESC_SERIAL_NUMBER_DEFINE(marshal_sn);
+USBD_DESC_CONFIG_DEFINE(marshal_fs_cfg, "FS Config");
+USBD_CONFIGURATION_DEFINE(marshal_fs_config, USB_SCD_SELF_POWERED, 125, &marshal_fs_cfg);
 
 // SENSOR READERS
 static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
@@ -93,13 +103,24 @@ static bool checkBatteryVoltage() {
     return true;
 }
 
-
+static void init_usb() {
+    usbd_add_descriptor(&marshal_usbd, &marshal_lang);
+    usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
+    usbd_add_descriptor(&marshal_usbd, &marshal_product);
+    usbd_add_descriptor(&marshal_usbd, &marshal_sn);
+    usbd_add_configuration(&marshal_usbd, USBD_SPEED_FS, &marshal_fs_config);
+    usbd_register_all_classes(&marshal_usbd, USBD_SPEED_FS, 1, NULL);
+    usbd_init(&marshal_usbd);
+    usbd_enable(&marshal_usbd);
+}
 
 int main() {
     int ret = FlightComputerSettings::load();
     if (ret != 0) {
         LOG_ERR("Failed to load settings: %d", ret);
     }
+
+    init_usb();
 
     ret = barometer.init();
     if (ret != 0) {
