@@ -36,7 +36,7 @@ static Led statusLed(&statusLedSpec);
 static Buzzer buzzer(&buzzerSpec);
 
 // USB
-USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x2FE3, 0x0001);
+USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x0483, 0x5740);
 USBD_DESC_LANG_DEFINE(marshal_lang);
 USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
 USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
