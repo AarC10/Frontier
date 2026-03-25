@@ -14,4 +14,6 @@ add_subdirectory_ifdef(CONFIG_CORE_FLIGHT_LOGGER flight_logger)
 
 add_subdirectory_ifdef(CONFIG_CORE_SENSORS sensors)
 
+add_subdirectory_ifdef(CONFIG_CORE_IO io)
+
 add_subdirectory_ifdef(CONFIG_CORE_SETTINGS settings)
