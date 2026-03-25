@@ -120,7 +120,19 @@ int main() {
         LOG_ERR("Failed to load settings: %d", ret);
     }
 
+
+    static const flash_area *rawFa = nullptr;
+    static const flash_area *fatFa = nullptr;
+    flash_area_open(FIXED_PARTITION_ID(raw_partition), &rawFa);
+    flash_area_open(FIXED_PARTITION_ID(fat_partition), &fatFa);
+
+    static FlightExporter exporter(rawFa, fatFa);
+    ret = exporter.init();
     init_usb();
+
+    if (ret != 0) {
+        LOG_ERR("FlightExporter init failed: %d", ret);
+    }
 
     ret = barometer.init();
     if (ret != 0) {

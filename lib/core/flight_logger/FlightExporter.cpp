@@ -34,15 +34,7 @@ FlightExporter::FlightExporter(const flash_area *rawPartition,
 	: rawFa(rawPartition), fatFa(fatPartition) {}
 
 int FlightExporter::init() {
-	struct fs_statvfs stat;
-	int ret = fs_statvfs(FAT_MOUNT, &stat);
-	if (ret == 0) {
-		mounted = true;
-		LOG_INF("FAT mounted at %s", FAT_MOUNT);
-		return 0;
-	}
-	LOG_ERR("FAT not mounted at %s: %d", FAT_MOUNT, ret);
-	return ret;
+	return mountOrFormat();
 }
 
 int FlightExporter::mountOrFormat() {
@@ -75,7 +67,7 @@ int FlightExporter::formatAndMount() {
 		return ret;
 	}
 
-	ret = fs_mkfs(FS_FATFS, reinterpret_cast<uintptr_t>("MARSHAL"), nullptr, 0);
+	ret = fs_mkfs(FS_FATFS, reinterpret_cast<uintptr_t>("marshal"), nullptr, 0);
 	if (ret != 0) {
 		LOG_ERR("fs_mkfs failed: %d", ret);
 		return ret;
