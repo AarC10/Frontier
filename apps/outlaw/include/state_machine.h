@@ -26,12 +26,20 @@ class StateMachine {
     void transitionTo(State target);
     int checkForTransition();
 
+    void doTx();
+
+    friend void txWorkHandler(struct k_work *work);
+
 #ifdef CONFIG_LICENSED_FREQUENCY
     const char *callsign;
 #endif
     LoraTransceiver lora;
     GnssReceiver gnssReceiver;
     k_timer txTimer{};
+    k_work txWork{};
+    k_spinlock dataLock{};
+    gnss_data pendingGnssData{};
+    bool pendingHasFix{false};
     uint8_t nodeId{};
     int lastPinSate{-1};
     State currentState{State::Transmitter};

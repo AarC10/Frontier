@@ -22,11 +22,17 @@ static void txTimerCallback(struct k_timer *timer) {
     }
 }
 
+void txWorkHandler(struct k_work *work) {
+    auto *sm = CONTAINER_OF(work, StateMachine, txWork);
+    sm->doTx();
+}
+
 #ifdef CONFIG_LICENSED_FREQUENCY
 StateMachine::StateMachine(uint8_t nodeId, const float frequencyMHz, const char *callsign)
     : callsign(callsign), lora(nodeId, frequencyMHz), nodeId(nodeId) {
     k_timer_init(&txTimer, txTimerCallback, nullptr);
     k_timer_user_data_set(&txTimer, this);
+    k_work_init(&txWork, txWorkHandler);
     lora.setCallsign(callsign);
 
 #ifdef CONFIG_DEFAULT_RECEIVE_MODE
@@ -46,6 +52,7 @@ StateMachine::StateMachine(const uint8_t nodeId, const float frequencyMhz)
     : lora(nodeId, frequencyMhz), nodeId(nodeId) {
     k_timer_init(&txTimer, txTimerCallback, nullptr);
     k_timer_user_data_set(&txTimer, this);
+    k_work_init(&txWork, txWorkHandler);
 
 #ifdef CONFIG_DEFAULT_RECEIVE_MODE
     currentState = State::Receiver;
@@ -61,14 +68,23 @@ StateMachine::StateMachine(const uint8_t nodeId, const float frequencyMhz)
 #endif
 
 void StateMachine::handleTxTimer() {
-    bool success = false;
-
-    if (gnssReceiver.isFixAcquired()) {
-        success = lora.txGnssPayload(gnssReceiver.getLatestData());
-    } else {
-        success = lora.txNoFixPayload();
+    k_spinlock_key_t key = k_spin_lock(&dataLock);
+    pendingHasFix = gnssReceiver.isFixAcquired();
+    if (pendingHasFix) {
+        pendingGnssData = gnssReceiver.getLatestData();
     }
+    k_spin_unlock(&dataLock, key);
 
+    k_work_submit(&txWork);
+}
+
+void StateMachine::doTx() {
+    k_spinlock_key_t key = k_spin_lock(&dataLock);
+    const bool hasFix = pendingHasFix;
+    const gnss_data snapshot = pendingGnssData;
+    k_spin_unlock(&dataLock, key);
+
+    const bool success = hasFix ? lora.txGnssPayload(snapshot) : lora.txNoFixPayload();
     if (!success) {
         LOG_ERR("Failed to transmit LoRa packet");
     }
