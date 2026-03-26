@@ -64,6 +64,8 @@ static void baroThreadEntry(void *, void *, void *) {
     while (true) {
         const BaroSample sample = barometer.sample();
         // logger.logBaro(sample);
+
+        LOG_INF("Barometer: pressure=%.2f kPa altitude=%.1f m temp=%.2f C", sensor_value_to_float(&sample.pressure), pressureKPaToAltitudeM(sensor_value_to_float(&sample.pressure)), sensor_value_to_float(&sample.temperature));
         k_sleep(K_MSEC(40)); // 25 Hz
     }
 }
@@ -81,8 +83,8 @@ static void voltageThreadEntry(void *, void *, void *) {
                           // 0, 0 // TODO: read pyro ILM channels
         // );
 
-        // LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", static_cast<uint16_t>(voltageMonitor.vbatMv()),
-        //         static_cast<uint16_t>(voltageMonitor.vccMv()));
+         LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", static_cast<uint16_t>(voltageMonitor.vbatMv()),
+                 static_cast<uint16_t>(voltageMonitor.vccMv()));
 
         k_sleep(K_MSEC(1000)); // 1 Hz
     }
@@ -205,6 +207,10 @@ int main() {
 
     k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
+
+    while (true) {
+        statusLed.on();
+    }
 
     // LOG_INF("READY: armed=%s mode=%u main_alt=%u ft log=%u/%u bytes", armed ? "YES" : "NO",
     //         static_cast<unsigned>(FlightComputerSettings::deployMode()), FlightComputerSettings::mainDeployAltFt(),
