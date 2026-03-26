@@ -61,10 +61,15 @@ StateMachine::StateMachine(const uint8_t nodeId, const float frequencyMhz)
 #endif
 
 void StateMachine::handleTxTimer() {
+    bool success = false;
     if (gnssReceiver.isFixAcquired()) {
-        lora.txGnssPayload(gnssReceiver.getLatestData());
+        success = lora.txGnssPayload(gnssReceiver.getLatestData());
     } else {
-        lora.txNoFixPayload();
+        success = lora.txNoFixPayload();
+    }
+
+    if (!success) {
+        LOG_ERR("Failed to transmit LoRa packet");
     }
 }
 

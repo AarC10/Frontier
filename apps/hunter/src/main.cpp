@@ -26,7 +26,7 @@ int main(void) {
     lora.awaitRxPacket();
 
     while (true) {
-        k_sleep(K_FOREVER);
+        k_sleep(K_SECONDS(6));
     }
 
     return 0;

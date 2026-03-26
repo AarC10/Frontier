@@ -8,6 +8,7 @@
 #include <st/l1/stm32l151Xb-a.dtsi>
 #include <st/l1/stm32l151c(6-8-b)uxa-pinctrl.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/lora/sx126x.h>
 
 / {
 	model = "Hunter Receiver Gen 2";
@@ -123,18 +124,16 @@
 	status = "okay";
 
 	lora0: lora0@0 {
-        compatible = "semtech,sx1262";
-        reg = <0>;
-        reset-gpios = <&gpiob 11 GPIO_ACTIVE_LOW>;
-        dio1-gpios = <&gpiob 13 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-        busy-gpios = <&gpiob 14 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-//		rx-enable-gpios = <&gpiob 15 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-//        antenna-enable-gpios = <&gpiob 12 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-        dio2-tx-enable;
-//        tcxo-power-startup-delay-ms = <5>;
+		compatible = "semtech,sx1262";
+		reg = <0>;
 
-        spi-max-frequency = <DT_FREQ_M(1)>;
-        status = "okay";
+		reset-gpios = <&gpiob 11 GPIO_ACTIVE_LOW>;
+		dio1-gpios = <&gpiob 13 GPIO_ACTIVE_HIGH>;
+		busy-gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
+
+		dio2-tx-enable;
+		spi-max-frequency = <DT_FREQ_M(1)>;
+		status = "okay";
 	};
 };
 
