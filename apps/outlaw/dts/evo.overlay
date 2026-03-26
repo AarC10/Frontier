@@ -22,7 +22,6 @@
 		dio1-gpios = <&gpiob 13 GPIO_ACTIVE_HIGH>;
 		busy-gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
 
-		dio2-tx-enable;
 		spi-max-frequency = <DT_FREQ_M(1)>;
 		status = "okay";
     };
