@@ -1,0 +1,186 @@
+/*
+ * Copyright (c) 2024 Aaron Chan
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <st/l1/stm32l151Xb-a.dtsi>
+#include <st/l1/stm32l151c(6-8-b)uxa-pinctrl.dtsi>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	model = "Hunter Receiver Gen 2";
+	compatible = "st,stm32l151xb";
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	leds: leds {
+		compatible = "gpio-leds";
+
+		led: led {
+			gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>;
+			label = "User LD2";
+		};
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+
+		dip1: dip1 {
+			label = "DIP 1";
+			gpios = <&gpioa 0 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+
+		dip2: dip2 {
+			label = "DIP 2";
+			gpios = <&gpioa 1 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+
+		pps: pps {
+			label = "GNSS PPS";
+			gpios = <&gpiob 5 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+
+	aliases {
+		dbg-uart = &usart1;
+		gnss-uart = &usart2;
+		lora = &lora0;
+		dip0 = &dip1;
+		dip1 = &dip2;
+		gnss = &maxm10s;
+		led0 = &led;
+		watchdog0 = &iwdg;
+		die-temp0 = &die_temp;
+		pps = &pps;
+		tdma-timer = &tdma;
+	};
+
+};
+
+&clk_lsi {
+	status = "okay";
+};
+
+&clk_hsi {
+	status = "okay";
+};
+
+&clk_hse {
+	status = "okay";
+	clock-frequency = <DT_FREQ_M(16)>;
+};
+
+&pll {
+	div = <2>; // 3 for 16 or 8
+	mul = <4>; // 3 for 16 or 8
+	clocks = <&clk_hsi>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(32)>; // TODO: Lower frequency
+	ahb-prescaler = <1>; //1 for 16 2 for 8
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+};
+
+// DEBUG UART
+&usart1 {
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	pinctrl-names = "default";
+	current-speed = <9600>;
+	status = "okay";
+};
+
+// GPS UART
+&usart2 {
+	pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pa3>;
+	pinctrl-names = "default";
+	current-speed = <9600>;
+	status = "okay";
+
+	maxm10s: ublox-maxm10s {
+		status = "okay";
+		compatible = "gnss-nmea-generic";
+	};
+};
+
+&spi1 {
+	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa7>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpiob 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	status = "okay";
+
+	lora0: lora0@0 {
+		compatible = "semtech,sx1276";
+		reg = <0>;
+		reset-gpios = <&gpiob 11 GPIO_ACTIVE_LOW>;
+		dio-gpios = <&gpiob 14 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+					<&gpiob 13 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+					<&gpiob 12 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+					<&gpioa 8 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+					<&gpiob 15 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+					<&gpiob 9 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		power-amplifier-output = "pa-boost";
+		// Note: 10 MHz max, but can't comm properly at that speed unlike Deputy
+		spi-max-frequency = <DT_FREQ_M(1)>;
+		status = "okay";
+	};
+};
+
+//&iwdg {
+//	status = "okay";
+//};
+
+//&rtc {
+//	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x10000000>,
+//		 <&rcc STM32_SRC_LSI RTC_SEL(2)>;
+//	status = "okay";
+//};
+
+&die_temp {
+	status = "okay";
+};
+
+//&dma1 {
+//	status = "okay";
+//};
+
+&timers2 {
+	status = "okay";
+	tdma: tdma {
+		compatible = "st,stm32-counter";
+		status = "okay";
+		label = "COUNTER_2";
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Set 2KB of storage at the end of 128KB flash */
+		storage_partition: partition@1f800 {
+			label = "storage";
+			reg = <0x0001f800 DT_SIZE_K(2)>;
+		};
+	};
+};
+
+&sram0 {
+    reg = <0x20000000 0x8000>;
+    status = "okay";
+};

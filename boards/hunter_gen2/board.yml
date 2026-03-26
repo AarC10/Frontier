@@ -1,0 +1,6 @@
+board:
+  name: hunter_gen2
+  full_name: Hunter Receiver Gen 2
+  vendor: Wild West Rocketry
+  socs:
+    - name: stm32l151xb

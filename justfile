@@ -23,11 +23,20 @@ outlaw-evo-433:
 
 # Build hunter receiver firmwarey
 hunter:
-    west build -b hunter apps/hunter -p auto --build-dir builds/hunter
+    west build -b hunter_gen2 apps/hunter -p auto --build-dir builds/hunter
 
 # Build hunter receiver firmware with 433 MHz support
 hunter-433:
-    west build -b hunter apps/hunter -p auto --build-dir builds/hunter-433 -- -DCONFIG_LICENSED_FREQUENCY=y
+    west build -b hunter_gen2 apps/hunter -p auto --build-dir builds/hunter-433 -- -DCONFIG_LICENSED_FREQUENCY=y
+
+# Build hunter receiver firmwarey
+hunter-old:
+    west build -b hunter_gen2 apps/hunter -p auto --build-dir builds/hunter
+
+# Build hunter receiver firmware with 433 MHz support
+hunter-old-433:
+    west build -b hunter_gen2 apps/hunter -p auto --build-dir builds/hunter-433 -- -DCONFIG_LICENSED_FREQUENCY=y
+
 
 marshal:
     west build -b marshal apps/marshal -p auto --build-dir builds/marshal -DZEPHYR_SCA_VARIANT=dtdoctor

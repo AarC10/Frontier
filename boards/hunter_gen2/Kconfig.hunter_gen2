@@ -1,0 +1,2 @@
+config BOARD_HUNTER_GEN2
+	select SOC_STM32L151XB

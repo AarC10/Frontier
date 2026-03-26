@@ -1,0 +1,18 @@
+identifier: hunter_gen2
+name: Hunter Receiver Gen 2
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+  - xtools
+ram: 32
+flash: 128
+supported:
+  - gpio
+  - spi
+  - adc
+  - dma
+  - nvs
+  - counter
+vendor: st
