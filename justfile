@@ -15,11 +15,11 @@ outlaw-433:
 
 # Build Outlaw EVO firmware
 outlaw-evo:
-    west build -b outlaw_evo apps/outlaw -p auto --build-dir builds/outlaw-evo -- -DOVERLAY_CONFIG=dts/gen3_sx1262.overlay
+    west build -b outlaw_gen3 apps/outlaw -p auto --build-dir builds/outlaw-evo -- -DDTC_OVERLAY_FILE=dts/evo.overlay
 
 # Build Outlaw EVO firmware with 433 MHz support
 outlaw-evo-433:
-    west build -b outlaw_evo apps/outlaw -p auto --build-dir builds/outlaw-evo-433 -- -DOVERLAY_CONFIG=dts/gen3_sx1262.overlay -DCONFIG_LICENSED_FREQUENCY=y
+    west build -b outlaw_gen3 apps/outlaw -p auto --build-dir builds/outlaw-evo-433 -- -DDTC_OVERLAY_FILE=dts/evo.overlay -DCONFIG_LICENSED_FREQUENCY=y
 
 # Build hunter receiver firmwarey
 hunter:
