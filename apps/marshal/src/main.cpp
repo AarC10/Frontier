@@ -36,13 +36,13 @@ static Led statusLed(&statusLedSpec);
 static Buzzer buzzer(&buzzerSpec);
 
 // USB
-// USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x0483, 0x5740);
-// USBD_DESC_LANG_DEFINE(marshal_lang);
-// USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
-// USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
-// USBD_DESC_SERIAL_NUMBER_DEFINE(marshal_sn);
-// USBD_DESC_CONFIG_DEFINE(marshal_fs_cfg, "FS Config");
-// USBD_CONFIGURATION_DEFINE(marshal_fs_config, USB_SCD_SELF_POWERED, 125, &marshal_fs_cfg);
+USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x0483, 0x5740);
+USBD_DESC_LANG_DEFINE(marshal_lang);
+USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
+USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
+USBD_DESC_SERIAL_NUMBER_DEFINE(marshal_sn);
+USBD_DESC_CONFIG_DEFINE(marshal_fs_cfg, "FS Config");
+USBD_CONFIGURATION_DEFINE(marshal_fs_config, USB_SCD_SELF_POWERED, 125, &marshal_fs_cfg);
 
 // SENSOR READERS
 static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
@@ -64,6 +64,8 @@ static void baroThreadEntry(void *, void *, void *) {
     while (true) {
         const BaroSample sample = barometer.sample();
         // logger.logBaro(sample);
+
+        LOG_INF("Barometer: pressure=%.2f kPa altitude=%.1f m temp=%.2f C", sensor_value_to_float(&sample.pressure), pressureKPaToAltitudeM(sensor_value_to_float(&sample.pressure)), sensor_value_to_float(&sample.temperature));
         k_sleep(K_MSEC(40)); // 25 Hz
     }
 }
@@ -81,8 +83,8 @@ static void voltageThreadEntry(void *, void *, void *) {
                           // 0, 0 // TODO: read pyro ILM channels
         // );
 
-        // LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", static_cast<uint16_t>(voltageMonitor.vbatMv()),
-        //         static_cast<uint16_t>(voltageMonitor.vccMv()));
+         LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", static_cast<uint16_t>(voltageMonitor.vbatMv()),
+                 static_cast<uint16_t>(voltageMonitor.vccMv()));
 
         k_sleep(K_MSEC(1000)); // 1 Hz
     }
@@ -104,14 +106,14 @@ static bool checkBatteryVoltage() {
 }
 
 static void init_usb() {
-    // usbd_add_descriptor(&marshal_usbd, &marshal_lang);
-    // usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
-    // usbd_add_descriptor(&marshal_usbd, &marshal_product);
-    // usbd_add_descriptor(&marshal_usbd, &marshal_sn);
-    // usbd_add_configuration(&marshal_usbd, USBD_SPEED_FS, &marshal_fs_config);
-    // usbd_register_all_classes(&marshal_usbd, USBD_SPEED_FS, 1, NULL);
-    // usbd_init(&marshal_usbd);
-    // usbd_enable(&marshal_usbd);
+    usbd_add_descriptor(&marshal_usbd, &marshal_lang);
+    usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
+    usbd_add_descriptor(&marshal_usbd, &marshal_product);
+    usbd_add_descriptor(&marshal_usbd, &marshal_sn);
+    usbd_add_configuration(&marshal_usbd, USBD_SPEED_FS, &marshal_fs_config);
+    usbd_register_all_classes(&marshal_usbd, USBD_SPEED_FS, 1, NULL);
+    usbd_init(&marshal_usbd);
+    usbd_enable(&marshal_usbd);
 }
 
 int main() {
@@ -205,6 +207,10 @@ int main() {
 
     k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
+
+    while (true) {
+        statusLed.on();
+    }
 
     // LOG_INF("READY: armed=%s mode=%u main_alt=%u ft log=%u/%u bytes", armed ? "YES" : "NO",
     //         static_cast<unsigned>(FlightComputerSettings::deployMode()), FlightComputerSettings::mainDeployAltFt(),

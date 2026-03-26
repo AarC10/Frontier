@@ -12,7 +12,7 @@
 
 	chosen {
 		zephyr,console = &usart2;
-		zephyr,shell-uart = &usart2;
+		zephyr,shell-uart = &cdc_acm_uart0;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 
@@ -269,7 +269,6 @@
 		zephyr,reference = "ADC_REF_INTERNAL";
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
 		zephyr,resolution = <12>;
-		zephyr,vref-mv = <3300>;
 	};
 
 	v3v3_sense: channel@2 {
@@ -278,7 +277,6 @@
 		zephyr,reference = "ADC_REF_INTERNAL";
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
 		zephyr,resolution = <12>;
-		zephyr,vref-mv = <3300>;
 	};
 };
 
