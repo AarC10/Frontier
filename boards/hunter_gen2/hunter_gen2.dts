@@ -123,19 +123,18 @@
 	status = "okay";
 
 	lora0: lora0@0 {
-		compatible = "semtech,sx1276";
-		reg = <0>;
-		reset-gpios = <&gpiob 11 GPIO_ACTIVE_LOW>;
-		dio-gpios = <&gpiob 14 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
-					<&gpiob 13 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
-					<&gpiob 12 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
-					<&gpioa 8 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
-					<&gpiob 15 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
-					<&gpiob 9 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-		power-amplifier-output = "pa-boost";
-		// Note: 10 MHz max, but can't comm properly at that speed unlike Deputy
-		spi-max-frequency = <DT_FREQ_M(1)>;
-		status = "okay";
+        compatible = "semtech,sx1262";
+        reg = <0>;
+        reset-gpios = <&gpiob 11 GPIO_ACTIVE_LOW>;
+        dio1-gpios = <&gpiob 13 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+        busy-gpios = <&gpiob 14 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+//		rx-enable-gpios = <&gpiob 15 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+//        antenna-enable-gpios = <&gpiob 12 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+        dio2-tx-enable;
+//        tcxo-power-startup-delay-ms = <5>;
+
+        spi-max-frequency = <DT_FREQ_M(1)>;
+        status = "okay";
 	};
 };
 
