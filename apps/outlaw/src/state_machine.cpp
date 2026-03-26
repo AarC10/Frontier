@@ -62,6 +62,7 @@ StateMachine::StateMachine(const uint8_t nodeId, const float frequencyMhz)
 
 void StateMachine::handleTxTimer() {
     bool success = false;
+
     if (gnssReceiver.isFixAcquired()) {
         success = lora.txGnssPayload(gnssReceiver.getLatestData());
     } else {
