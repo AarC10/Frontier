@@ -61,7 +61,7 @@
 		partition = <&fat_partition>;
 		disk-name = "marshal";
 		cache-size = <4096>;
-		status = "disabled";
+		status = "okay";
 	};
 
 //	fstab {
@@ -153,7 +153,7 @@
 	hbitclkdiv = <27>;
 	pinctrl-0 = <&ucpd1_cc1_pb6 &ucpd1_cc2_pb4>;
 	pinctrl-names = "default";
-	status = "disabled";
+	status = "okay";
 };
 
 
@@ -193,7 +193,7 @@
 	pinctrl-0 = <&spi2_sck_pb13 &spi2_miso_pb14 &spi2_mosi_pb15>;
 	pinctrl-names = "default";
 	cs-gpios = <&gpiob 12 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-	status = "disabled";
+	status = "okay";
 
 	w25q128jvsiq: spi-nor-flash@0 {
 		compatible = "jedec,spi-nor";
@@ -204,7 +204,7 @@
 
 		wp-gpios = <&gpioa 10 GPIO_ACTIVE_LOW>;
 		reset-gpios = <&gpiob 10 GPIO_ACTIVE_LOW>;
-		status = "disabled";
+		status = "okay";
 
 		partitions {
 			compatible = "fixed-partitions";
@@ -298,7 +298,7 @@
 zephyr_udc0: &usb {
 	pinctrl-0 = <&usb_dm_pa11 &usb_dp_pa12>;
 	pinctrl-names = "default";
-	status = "disabled";
+	status = "okay";
 
 	cdc_acm_uart0: cdc_acm_uart0 {
 		compatible = "zephyr,cdc-acm-uart";
