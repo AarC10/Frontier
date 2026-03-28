@@ -16,9 +16,9 @@ static void loraReceiveCallback(const device *dev, uint8_t *data, uint16_t size,
     }
 }
 
-static int32_t nanoToMilli(const int64_t nano) { return static_cast<int32_t>(nano / 1'000'000); }
+static int32_t nanoToMicro(const int64_t nano) { return static_cast<int32_t>(nano / 1'000); }
 
-static double milliToDeg(const int32_t milli) { return static_cast<double>(milli) / 1'000.0; }
+static double microToDeg(const int32_t micro) { return static_cast<double>(micro) / 1'000'000.0; }
 
 LoraTransceiver::LoraTransceiver(const uint8_t nodeId, const float frequencyMHz) : nodeId(nodeId) {
     config.frequency = static_cast<uint32_t>(frequencyMHz * 1'000'000);
@@ -42,8 +42,8 @@ bool LoraTransceiver::txGnssPayload(const gnss_data &gnssData) {
     memcpy(&packet.callsign, callsign, std::min(strlen(callsign), CALLSIGN_CHAR_COUNT));
 #endif
     packet.node_id = nodeId;
-    packet.gnssInfo.latitude = nanoToMilli(gnssData.nav_data.latitude);
-    packet.gnssInfo.longitude = nanoToMilli(gnssData.nav_data.longitude);
+    packet.gnssInfo.latitude = nanoToMicro(gnssData.nav_data.latitude);
+    packet.gnssInfo.longitude = nanoToMicro(gnssData.nav_data.longitude);
     packet.gnssInfo.satellites_cnt = static_cast<uint8_t>(gnssData.info.satellites_cnt);
     packet.gnssInfo.fix_status = gnssData.info.fix_status;
 
@@ -188,8 +188,8 @@ void LoraTransceiver::parseLoraFrame(const LoraFrame &frame, const size_t size, 
 #ifdef CONFIG_LICENSED_FREQUENCY
     LOG_INF("\tCallsign: %.*s", CALLSIGN_CHAR_COUNT, frame.callsign);
 #endif
-    LOG_INF("\tLatitude: %f", milliToDeg(frame.gnssInfo.latitude));
-    LOG_INF("\tLongitude: %f", milliToDeg(frame.gnssInfo.longitude));
+    LOG_INF("\tLatitude: %f", microToDeg(frame.gnssInfo.latitude));
+    LOG_INF("\tLongitude: %f", microToDeg(frame.gnssInfo.longitude));
     LOG_INF("\tSatellites count: %u", frame.gnssInfo.satellites_cnt);
     switch (frame.gnssInfo.fix_status) {
         case GNSS_FIX_STATUS_NO_FIX:

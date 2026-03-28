@@ -209,7 +209,8 @@ int main() {
                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
 
     while (true) {
-        statusLed.on();
+        statusLed.toggle();
+        k_msleep(1000);
     }
 
     // LOG_INF("READY: armed=%s mode=%u main_alt=%u ft log=%u/%u bytes", armed ? "YES" : "NO",
