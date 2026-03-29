@@ -1,0 +1,82 @@
+/ {
+	sim_barometer: sim_barometer {
+		compatible = "zephyr,fake-sensor";
+		status = "okay";
+	};
+
+	sim_imu: sim_imu {
+		compatible = "zephyr,fake-sensor";
+		status = "okay";
+	};
+
+	sim_vbat_sensor: sim_vbat_sensor {
+		compatible = "zephyr,fake-sensor";
+		status = "okay";
+	};
+
+	sim_vcc_sensor: sim_vcc_sensor {
+		compatible = "zephyr,fake-sensor";
+		status = "okay";
+	};
+
+	pyro: pyro {
+		stm_ch1_en: stm_ch1_en {
+			gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+			label = "STM-CH1-EN";
+		};
+
+		stm_ch2_en: stm_ch2_en {
+			gpios = <&gpio0 1 GPIO_ACTIVE_HIGH>;
+			label = "STM-CH2-EN";
+		};
+
+		flt1: flt1 {
+			gpios = <&gpio0 2 GPIO_ACTIVE_LOW>;
+			label = "FLT1";
+		};
+
+		flt2: flt2 {
+			gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+			label = "FLT2";
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led_0 {
+			gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+			label = "Status LED";
+		};
+	};
+
+	aliases {
+		led0 = &led0;
+		barometer = &sim_barometer;
+		imu = &sim_imu;
+		stm-ch1-en = &stm_ch1_en;
+		stm-ch2-en = &stm_ch2_en;
+		flt1 = &flt1;
+		flt2 = &flt2;
+		vbat-sensor = &sim_vbat_sensor;
+		vcc-sensor = &sim_vcc_sensor;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		storage_partition: partition@0 {
+			label = "storage";
+			reg = <0x00000000 0x10000>;
+		};
+
+		logging_partition: partition@10000 {
+			label = "logging";
+			reg = <0x00010000 0x10000>;
+		};
+	};
+};

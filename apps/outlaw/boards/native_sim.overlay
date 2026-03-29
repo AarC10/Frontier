@@ -1,0 +1,69 @@
+// native_sim overlay for Outlaw GPS tracker
+// Provides emulated peripherals matching the aliases used by application code
+
+/ {
+	leds: leds {
+		compatible = "gpio-leds";
+
+		led: led {
+			gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+			label = "User LD2";
+		};
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+
+		dip1: dip1 {
+			label = "DIP 1";
+			gpios = <&gpio0 1 GPIO_ACTIVE_LOW>;
+			zephyr,code = <0>;
+		};
+
+		dip2: dip2 {
+			label = "DIP 2";
+			gpios = <&gpio0 2 GPIO_ACTIVE_LOW>;
+			zephyr,code = <0>;
+		};
+
+		pps: pps {
+			label = "GNSS PPS";
+			gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+			zephyr,code = <0>;
+		};
+	};
+
+	// Simulated LoRa over UDP multicast
+	lora0: lora_sim {
+		compatible = "wildwest,lora-sim";
+		frequency = <903000000>;
+		status = "okay";
+	};
+
+	aliases {
+		led0 = &led;
+		dip0 = &dip1;
+		dip1 = &dip2;
+		pps = &pps;
+		lora = &lora0;
+	};
+};
+
+// GNSS UART - native_sim provides uart0/uart1 by default
+// Application can use uart1 as gnss-uart for NMEA injection via pipe/PTY
+&uart1 {
+	status = "okay";
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		storage_partition: partition@0 {
+			label = "storage";
+			reg = <0x00000000 DT_SIZE_K(16)>;
+		};
+	};
+};

@@ -1,0 +1,35 @@
+/ {
+	leds: leds {
+		compatible = "gpio-leds";
+
+		led: led {
+			gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+			label = "User LD2";
+		};
+	};
+
+	// Simulated LoRa over UDP multicast
+	lora0: lora_sim {
+		compatible = "wildwest,lora-sim";
+		frequency = <903000000>;
+		status = "okay";
+	};
+
+	aliases {
+		led0 = &led;
+		lora = &lora0;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		storage_partition: partition@0 {
+			label = "storage";
+			reg = <0x00000000 DT_SIZE_K(16)>;
+		};
+	};
+};

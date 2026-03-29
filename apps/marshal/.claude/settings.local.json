@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat /home/aaron/Development/Frontier/Frontier/.github/workflows/*.yml)"
+    ]
+  }
+}
