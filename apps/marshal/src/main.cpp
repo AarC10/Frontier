@@ -19,16 +19,20 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
 #include <zephyr/storage/flash_map.h>
+#if defined(CONFIG_USBD)
 #include <zephyr/usb/usbd.h>
+#endif
 
 LOG_MODULE_REGISTER(marshal, LOG_LEVEL_INF);
 
 // GLOBALS
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
 static Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
 static Imu imu(DEVICE_DT_GET(DT_ALIAS(imu)));
 static VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVICE_DT_GET(DT_ALIAS(vcc_sensor)));
 // static FlightLogger logger(PARTITION(raw_partition));
 static bool armed = false;
+#endif
 
 static gpio_dt_spec statusLedSpec = GPIO_DT_SPEC_GET(DT_ALIAS(led), gpios);
 static gpio_dt_spec buzzerSpec = GPIO_DT_SPEC_GET(DT_ALIAS(buzzer), gpios);
@@ -36,6 +40,7 @@ static Led statusLed(&statusLedSpec);
 static Buzzer buzzer(&buzzerSpec);
 
 // USB
+#if defined(CONFIG_USBD)
 USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x0483, 0x5740);
 USBD_DESC_LANG_DEFINE(marshal_lang);
 USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
@@ -43,8 +48,10 @@ USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
 USBD_DESC_SERIAL_NUMBER_DEFINE(marshal_sn);
 USBD_DESC_CONFIG_DEFINE(marshal_fs_cfg, "FS Config");
 USBD_CONFIGURATION_DEFINE(marshal_fs_config, USB_SCD_SELF_POWERED, 125, &marshal_fs_cfg);
+#endif
 
 // SENSOR READERS
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
 static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
     ARG_UNUSED(dev);
     ARG_UNUSED(trig);
@@ -52,7 +59,9 @@ static void imuDataReadyHandler(const device *dev, const sensor_trigger *trig) {
     const ImuSample sample = imu.sample();
     // logger.logImu(sample);
 }
+#endif
 
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
 #define BARO_STACK_SIZE 1024
 #define BARO_PRIORITY   4
 K_THREAD_STACK_DEFINE(baroStack, BARO_STACK_SIZE);
@@ -96,7 +105,7 @@ static bool checkBatteryVoltage() {
     const uint16_t threshold = FlightComputerSettings::minBatteryMv();
 
     if (vbat < threshold) {
-        LOG_ERR("Battery voltage %u mV below lockout threshold %u mV — NOT ARMING", vbat, threshold);
+        LOG_ERR("Battery voltage %u mV below lockout threshold %u mV - NOT ARMING", vbat, threshold);
         // TODO: signal error here
         return false;
     }
@@ -104,7 +113,9 @@ static bool checkBatteryVoltage() {
     LOG_INF("Battery voltage OK: %u mV (threshold %u mV)", vbat, threshold);
     return true;
 }
+#endif
 
+#if defined(CONFIG_USBD)
 static void init_usb() {
     usbd_add_descriptor(&marshal_usbd, &marshal_lang);
     usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
@@ -115,6 +126,7 @@ static void init_usb() {
     usbd_init(&marshal_usbd);
     usbd_enable(&marshal_usbd);
 }
+#endif
 
 int main() {
     int ret = FlightComputerSettings::load();
@@ -122,15 +134,19 @@ int main() {
         LOG_ERR("Failed to load settings: %d", ret);
     }
 
-
+#if !defined(CONFIG_BOARD_NATIVE_SIM)
     static const flash_area *rawFa = nullptr;
     static const flash_area *fatFa = nullptr;
-    flash_area_open(FIXED_PARTITION_ID(raw_partition), &rawFa);
-    flash_area_open(FIXED_PARTITION_ID(fat_partition), &fatFa);
+    flash_area_open(PARTITION_ID(raw_partition), &rawFa);
+    flash_area_open(PARTITION_ID(fat_partition), &fatFa);
+    ARG_UNUSED(rawFa);
+    ARG_UNUSED(fatFa);
 
     // static FlightExporter exporter(rawFa, fatFa);
     // ret = exporter.init();
+#if defined(CONFIG_USBD)
     init_usb();
+#endif
     //
     // if (ret != 0) {
     //     LOG_ERR("FlightExporter init failed: %d", ret);
@@ -173,6 +189,7 @@ int main() {
 
     // Init FSM
     static FlightStateMachine fsm(barometer, imu);
+    ARG_UNUSED(fsm);
 
     // TODO: feed FlightComputerSettings::armingAltM() and mainDeployAltM() into the FSM
 
@@ -207,6 +224,9 @@ int main() {
 
     k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
+#else
+    LOG_INF("native_sim mode: sensor, logger, and USB paths are disabled");
+#endif
 
     while (true) {
         statusLed.toggle();

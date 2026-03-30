@@ -44,6 +44,26 @@ marshal:
 fm-radio:
     west build -b nucleo_wb55rg apps/fm_radio -p auto --build-dir builds/fm_radio -DZEPHYR_SCA_VARIANT=dtdoctor
 
+
+marshal-sim:
+    west build -b native_sim apps/marshal -p auto --build-dir builds/marshal-sim
+
+outlaw-sim:
+    west build -b native_sim apps/outlaw -p auto --build-dir builds/outlaw-sim
+
+hunter-sim:
+    west build -b native_sim apps/hunter -p auto --build-dir builds/hunter-sim
+
+# Run native sim targets
+run-marshal-sim:
+    ./builds/marshal-sim/zephyr/zephyr.exe
+
+run-outlaw-sim:
+    ./builds/outlaw-sim/zephyr/zephyr.exe
+
+run-hunter-sim:
+    ./builds/hunter-sim/zephyr/zephyr.exe
+
 # Flash with ST-Link
 # Usage: just sflash outlaw | just sflash hunter
 sflash target:

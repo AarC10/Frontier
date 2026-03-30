@@ -48,10 +48,17 @@
 			gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
 			label = "Status LED";
 		};
+
+		buzzer: buzzer {
+			gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+			label = "Buzzer Enable";
+		};
 	};
 
 	aliases {
+		led = &led0;
 		led0 = &led0;
+		buzzer = &buzzer;
 		barometer = &sim_barometer;
 		imu = &sim_imu;
 		stm-ch1-en = &stm_ch1_en;
@@ -61,22 +68,24 @@
 		vbat-sensor = &sim_vbat_sensor;
 		vcc-sensor = &sim_vcc_sensor;
 	};
+
+	chosen {
+		zephyr,settings-partition = &nvs_partition;
+	};
 };
 
 &flash0 {
 	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		storage_partition: partition@0 {
-			label = "storage";
-			reg = <0x00000000 0x10000>;
+		nvs_partition: partition@fc000 {
+			label = "nvs_storage";
 		};
 
-		logging_partition: partition@10000 {
-			label = "logging";
-			reg = <0x00010000 0x10000>;
+		raw_partition: partition@c000 {
+			label = "raw_log";
+		};
+
+		fat_partition: partition@75000 {
+			label = "fat_export";
 		};
 	};
 };
