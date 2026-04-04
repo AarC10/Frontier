@@ -153,7 +153,7 @@
 	hbitclkdiv = <27>;
 	pinctrl-0 = <&ucpd1_cc1_pb6 &ucpd1_cc2_pb4>;
 	pinctrl-names = "default";
-	status = "disabled";
+	status = "okay";
 };
 
 
@@ -298,7 +298,7 @@
 zephyr_udc0: &usb {
 	pinctrl-0 = <&usb_dm_pa11 &usb_dp_pa12>;
 	pinctrl-names = "default";
-	status = "disabled";
+	status = "okay";
 
 	cdc_acm_uart0: cdc_acm_uart0 {
 		compatible = "zephyr,cdc-acm-uart";

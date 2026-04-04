@@ -4,8 +4,6 @@
  */
 
 #include <core/flight/FlightStateMachine.h>
-#include <core/flight_logger/FlightExporter.h>
-#include <core/flight_logger/FlightLogger.h>
 #include <cmath>
 #include <core/io/Buzzer.h>
 #include <core/io/Led.h>
@@ -19,8 +17,11 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
 #include <zephyr/storage/flash_map.h>
-#if defined(CONFIG_USBD)
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
 #include <zephyr/usb/usbd.h>
+#endif
+#if defined(CONFIG_USBD_MSC_CLASS)
+#include <zephyr/usb/class/usbd_msc.h>
 #endif
 
 LOG_MODULE_REGISTER(marshal, LOG_LEVEL_INF);
@@ -30,7 +31,6 @@ LOG_MODULE_REGISTER(marshal, LOG_LEVEL_INF);
 static Barometer barometer(DEVICE_DT_GET(DT_ALIAS(barometer)));
 static Imu imu(DEVICE_DT_GET(DT_ALIAS(imu)));
 static VoltageMonitor voltageMonitor(DEVICE_DT_GET(DT_ALIAS(vbat_sensor)), DEVICE_DT_GET(DT_ALIAS(vcc_sensor)));
-// static FlightLogger logger(PARTITION(raw_partition));
 static bool armed = false;
 #endif
 
@@ -40,7 +40,7 @@ static Led statusLed(&statusLedSpec);
 static Buzzer buzzer(&buzzerSpec);
 
 // USB
-#if defined(CONFIG_USBD)
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
 USBD_DEVICE_DEFINE(marshal_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), 0x0483, 0x5740);
 USBD_DESC_LANG_DEFINE(marshal_lang);
 USBD_DESC_MANUFACTURER_DEFINE(marshal_mfr, "Wild West Rocketry");
@@ -48,6 +48,9 @@ USBD_DESC_PRODUCT_DEFINE(marshal_product, "Marshal Flight Computer");
 USBD_DESC_SERIAL_NUMBER_DEFINE(marshal_sn);
 USBD_DESC_CONFIG_DEFINE(marshal_fs_cfg, "FS Config");
 USBD_CONFIGURATION_DEFINE(marshal_fs_config, USB_SCD_SELF_POWERED, 125, &marshal_fs_cfg);
+#endif
+#if defined(CONFIG_USBD_MSC_CLASS)
+USBD_DEFINE_MSC_LUN(marshal, "marshal", "WWR", "Marshal", "1.00");
 #endif
 
 // SENSOR READERS
@@ -69,12 +72,22 @@ static k_thread baroThread;
 float pressureKPaToAltitudeM(float pressureKPa) {
     return 44330.0f * (1.0f - std::pow(pressureKPa / 101.325f, 1.0f / 5.255f));
 }
+
+static uint32_t sensorValueMilli(const sensor_value &value) {
+    return static_cast<uint32_t>(value.val1) * 1000U + static_cast<uint32_t>(value.val2 / 1000);
+}
+
 static void baroThreadEntry(void *, void *, void *) {
     while (true) {
         const BaroSample sample = barometer.sample();
-        // logger.logBaro(sample);
 
-        LOG_INF("Barometer: pressure=%.2f kPa altitude=%.1f m temp=%.2f C", sensor_value_to_float(&sample.pressure), pressureKPaToAltitudeM(sensor_value_to_float(&sample.pressure)), sensor_value_to_float(&sample.temperature));
+        const uint32_t pressureMilliKpa = sensorValueMilli(sample.pressure);
+        const uint32_t altitudeMm = static_cast<uint32_t>(pressureKPaToAltitudeM(static_cast<float>(pressureMilliKpa) / 1000.0f) * 1000.0f);
+        const int32_t tempMilliC = sample.temperature.val1 * 1000 + sample.temperature.val2 / 1000;
+
+        LOG_INF("Barometer: pressure=%u.%03u kPa altitude=%u.%03u m temp=%d.%03d C", pressureMilliKpa / 1000,
+                pressureMilliKpa % 1000, altitudeMm / 1000, altitudeMm % 1000, tempMilliC / 1000,
+                std::abs(tempMilliC % 1000));
         k_sleep(K_MSEC(40)); // 25 Hz
     }
 }
@@ -88,10 +101,6 @@ static k_thread voltageThread;
 static void voltageThreadEntry(void *, void *, void *) {
     while (true) {
         voltageMonitor.sample();
-        // logger.logVoltage(static_cast<uint16_t>(voltageMonitor.vbatMv()), static_cast<uint16_t>(voltageMonitor.vccMv()),
-                          // 0, 0 // TODO: read pyro ILM channels
-        // );
-
          LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", static_cast<uint16_t>(voltageMonitor.vbatMv()),
                  static_cast<uint16_t>(voltageMonitor.vccMv()));
 
@@ -115,16 +124,55 @@ static bool checkBatteryVoltage() {
 }
 #endif
 
-#if defined(CONFIG_USBD)
-static void init_usb() {
-    usbd_add_descriptor(&marshal_usbd, &marshal_lang);
-    usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
-    usbd_add_descriptor(&marshal_usbd, &marshal_product);
-    usbd_add_descriptor(&marshal_usbd, &marshal_sn);
-    usbd_add_configuration(&marshal_usbd, USBD_SPEED_FS, &marshal_fs_config);
-    usbd_register_all_classes(&marshal_usbd, USBD_SPEED_FS, 1, NULL);
-    usbd_init(&marshal_usbd);
-    usbd_enable(&marshal_usbd);
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
+static void setUsbCodeTriple(enum usbd_speed speed) {
+    if (IS_ENABLED(CONFIG_USBD_CDC_ACM_CLASS) || IS_ENABLED(CONFIG_USBD_MSC_CLASS)) {
+        usbd_device_set_code_triple(&marshal_usbd, speed, USB_BCC_MISCELLANEOUS, 0x02, 0x01);
+        return;
+    }
+
+    usbd_device_set_code_triple(&marshal_usbd, speed, 0, 0, 0);
+}
+
+static int init_usb() {
+    int ret = usbd_add_descriptor(&marshal_usbd, &marshal_lang);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = usbd_add_descriptor(&marshal_usbd, &marshal_mfr);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = usbd_add_descriptor(&marshal_usbd, &marshal_product);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = usbd_add_descriptor(&marshal_usbd, &marshal_sn);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = usbd_add_configuration(&marshal_usbd, USBD_SPEED_FS, &marshal_fs_config);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = usbd_register_all_classes(&marshal_usbd, USBD_SPEED_FS, 1, NULL);
+    if (ret != 0) {
+        return ret;
+    }
+
+    setUsbCodeTriple(USBD_SPEED_FS);
+
+    ret = usbd_init(&marshal_usbd);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return usbd_enable(&marshal_usbd);
 }
 #endif
 
@@ -142,15 +190,12 @@ int main() {
     ARG_UNUSED(rawFa);
     ARG_UNUSED(fatFa);
 
-    // static FlightExporter exporter(rawFa, fatFa);
-    // ret = exporter.init();
-#if defined(CONFIG_USBD)
-    init_usb();
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
+    ret = init_usb();
+    if (ret != 0) {
+        LOG_ERR("USB init failed: %d", ret);
+    }
 #endif
-    //
-    // if (ret != 0) {
-    //     LOG_ERR("FlightExporter init failed: %d", ret);
-    // }
 
     ret = barometer.init();
     if (ret != 0) {
@@ -169,13 +214,6 @@ int main() {
 
     // Battery lockout and refuse to arm if voltage is too low
     armed = checkBatteryVoltage();
-
-    // Init flight logger
-    // ret = logger.init();
-    // if (ret != 0) {
-    //     LOG_ERR("Flight logger init failed: %d", ret);
-    //     // TODO: set a fault LED / buzzer pattern here.
-    // }
 
     ret = statusLed.init();
     if (ret != 0) {
