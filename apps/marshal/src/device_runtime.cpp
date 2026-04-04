@@ -212,10 +212,10 @@ static void baroThreadEntry(void*, void*, void*) {
         maybeRunDeployments();
 
         const int32_t aglMilliM = static_cast<int32_t>(currentAltitudeM * 1000.0f);
-        LOG_INF("Flight state=%u pressure=%u.%03u kPa altitude=%u.%03u m agl=%d.%03d m temp=%d.%03d C",
-                static_cast<unsigned>(state), pressureMilliKpa / 1000, pressureMilliKpa % 1000, altitudeMm / 1000,
-                altitudeMm % 1000, aglMilliM / 1000, std::abs(aglMilliM % 1000), tempMilliC / 1000,
-                std::abs(tempMilliC % 1000));
+        // LOG_INF("Flight state=%u pressure=%u.%03u kPa altitude=%u.%03u m agl=%d.%03d m temp=%d.%03d C",
+        //         static_cast<unsigned>(state), pressureMilliKpa / 1000, pressureMilliKpa % 1000, altitudeMm / 1000,
+        //         altitudeMm % 1000, aglMilliM / 1000, std::abs(aglMilliM % 1000), tempMilliC / 1000,
+        //         std::abs(tempMilliC % 1000));
 
         ++loopCount;
         k_sleep(K_MSEC(1000 / kImuLoopRateHz));

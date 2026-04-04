@@ -4,6 +4,10 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
 
+#include "zephyr/logging/log.h"
+
+LOG_MODULE_REGISTER(FlightStateMachine);
+
 FlightStateMachine::FlightStateMachine(Barometer &barometerRef, Imu &imuRef) : barometer(barometerRef), imu(imuRef) {
     const uint32_t now = k_uptime_get_32();
     stateEntryTimeMs = now;
@@ -24,8 +28,11 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
                 if (!above2gActive) {
                     above2gActive = true;
                     above2gStartMs = now;
+                    LOG_INF("Above %.1f G detected, starting timer", padBoostAccelGs);
+                    LOG_INF("Accel: %.2f G, Pressure: %.3f kPa, Altitude: %.2f m", accelG, currentPressureKPa, currentAltitudeM);
                 }
                 if (elapsedMs(now, above2gStartMs) >= padBoostSustainedMs) {
+                    LOG_INF("Launch detected, transitioning to BOOST");
                     transitionTo(FlightState::BOOST, now);
                     boostEntryTimeMs = now;
                     above2gActive = false;
@@ -102,8 +109,12 @@ float FlightStateMachine::accelMagnitudeG(const ImuSample &sample) {
     const double ax = sensor_value_to_double(&sample.accelX);
     const double ay = sensor_value_to_double(&sample.accelY);
     const double az = sensor_value_to_double(&sample.accelZ);
-    const double magnitude = std::sqrt(ax * ax + ay * ay + az * az);
-    return static_cast<float>(magnitude);
+    const double magnitudeMps2 = std::sqrt(ax * ax + ay * ay + az * az);
+    sensor_value magnitude{};
+    const int ret = sensor_value_from_double(&magnitude, magnitudeMps2);
+    const double magnitudeG = (ret == 0) ? static_cast<double>(sensor_ms2_to_ug(&magnitude)) / 1000000.0 : 0.0;
+    LOG_INF("Accel magnitude: %.2f G (ax=%.2f, ay=%.2f, az=%.2f m/s^2)", magnitudeG, ax, ay, az);
+    return static_cast<float>(magnitudeG);
 }
 
 float FlightStateMachine::pressureKPaToAltitudeM(float pressureKPa) {

@@ -1,6 +1,7 @@
 #include "core/sensors/Imu.h"
 
 #include <cmath>
+#include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
 
 Imu::Imu(const device *dev) : dev(dev) {}
@@ -66,6 +67,13 @@ float Imu::accelMagnitudeMg() const {
     const double ax = sensor_value_to_double(&lastSample.accelX);
     const double ay = sensor_value_to_double(&lastSample.accelY);
     const double az = sensor_value_to_double(&lastSample.accelZ);
+    const double magnitudeMps2 = std::sqrt(ax * ax + ay * ay + az * az);
+    sensor_value magnitude{};
+    const int ret = sensor_value_from_double(&magnitude, magnitudeMps2);
 
-    return static_cast<float>(std::sqrt(ax * ax + ay * ay + az * az) * 1000.0);
+    if (ret != 0) {
+        return 0.0f;
+    }
+
+    return static_cast<float>(sensor_ms2_to_mg(&magnitude));
 }
