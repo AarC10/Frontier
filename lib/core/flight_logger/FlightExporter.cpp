@@ -20,7 +20,7 @@
 LOG_MODULE_REGISTER(FlightExporter, LOG_LEVEL_INF);
 
 static constexpr size_t COPY_BUF_SIZE = 512;
-static const char *const FAT_MOUNT = "/export";
+static const char *const FAT_MOUNT = "/marshal:";
 
 static uint8_t __aligned(4) fatFsData[1024];
 static struct fs_mount_t fatMnt = {

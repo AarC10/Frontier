@@ -1,8 +1,10 @@
-std::to_underlying(oldState)pyright (c) 2026 Aaron Chan
+/*
+ * Copyright (c) 2026 Aaron Chan
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <core/flight/FlightStateMachine.h>
+#include <core/flight_logger/FlightExporter.h>
 #include <core/flight_logger/FlightLogger.h>
 #include <cmath>
 #include <core/io/Buzzer.h>
@@ -342,15 +344,24 @@ int main() {
     if (ret != 0) {
         LOG_ERR("Failed to open FAT partition: %d", ret);
     }
-    ARG_UNUSED(fatFa);
 
     static FlightLogger logger(rawFa);
+    static FlightExporter exporter(rawFa, fatFa);
     flightLogger = &logger;
 
     if (rawFa != nullptr) {
         ret = flightLogger->init();
         if (ret != 0) {
             LOG_ERR("Flight logger init failed: %d", ret);
+        }
+    }
+
+    if (rawFa != nullptr && fatFa != nullptr) {
+        ret = exporter.init();
+        if (ret != 0) {
+            LOG_ERR("Flight exporter init failed: %d", ret);
+        } else {
+            flightExporterShellRegister(&exporter);
         }
     }
 
