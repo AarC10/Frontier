@@ -15,7 +15,9 @@ int Imu::init(sensor_trigger_handler_t dataReadyHandler) {
     }
 
     if (dataReadyHandler == nullptr) {
-        return -EINVAL;
+        // Allow polling-only use when the board does not want to arm the sensor interrupt path.
+        lastError = 0;
+        return 0;
     }
 
     sensor_trigger trigger{};
