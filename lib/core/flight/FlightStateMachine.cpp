@@ -19,8 +19,14 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
     const float accelG = accelMagnitudeG(imuSample);
     const float currentPressureKPa = pressureKPa(baroSample);
     const float currentAltitudeM = pressureKPaToAltitudeM(currentPressureKPa);
-
     const bool pressureIncreasing = haveLastPressure && (currentPressureKPa > lastPressureKPa);
+
+    if (!havePadAltitude) {
+        padAltitudeM = currentAltitudeM;
+        havePadAltitude = true;
+    }
+
+    const float altitudeAglM = currentAltitudeM - padAltitudeM;
 
     switch (state) {
         case FlightState::PAD:
@@ -31,18 +37,24 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
                     LOG_INF("Above %.1f G detected, starting timer", padBoostAccelGs);
                     LOG_INF("Accel: %.2f G, Pressure: %.3f kPa, Altitude: %.2f m", accelG, currentPressureKPa, currentAltitudeM);
                 }
-                if (elapsedMs(now, above2gStartMs) >= padBoostSustainedMs) {
+                if (elapsedMs(now, above2gStartMs) >= padBoostSustainedMs && altitudeAglM >= padBoostAltitudeGainM) {
                     LOG_INF("Launch detected, transitioning to BOOST");
                     transitionTo(FlightState::BOOST, now);
                     boostEntryTimeMs = now;
                     above2gActive = false;
+                    maxAltitudeM = currentAltitudeM;
+                    descendingSampleCount = 0U;
                 }
             } else {
                 above2gActive = false;
+                padAltitudeM = currentAltitudeM;
             }
             break;
 
         case FlightState::BOOST:
+            if (currentAltitudeM > maxAltitudeM) {
+                maxAltitudeM = currentAltitudeM;
+            }
             if (accelG < boostCoastAccelGs) {
                 transitionTo(FlightState::COAST, now);
             }
@@ -51,7 +63,19 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
         case FlightState::COAST: {
             const bool inhibitApogee = elapsedMs(now, boostEntryTimeMs) < apogeeInhibitAfterBoostMs;
             const bool accelCondition = accelG < coastApogeeAccelGs;
-            const bool dualSensorApogee = accelCondition && pressureIncreasing;
+            if (currentAltitudeM > maxAltitudeM) {
+                maxAltitudeM = currentAltitudeM;
+                descendingSampleCount = 0U;
+            } else if ((maxAltitudeM - currentAltitudeM) >= apogeeDescentDeltaM && pressureIncreasing) {
+                if (descendingSampleCount < apogeeDescendingSamplesRequired) {
+                    ++descendingSampleCount;
+                }
+            } else {
+                descendingSampleCount = 0U;
+            }
+
+            const bool descentConfirmed = descendingSampleCount >= apogeeDescendingSamplesRequired;
+            const bool dualSensorApogee = accelCondition && descentConfirmed;
             if (!inhibitApogee && dualSensorApogee) {
                 transitionTo(FlightState::APOGEE, now);
             }

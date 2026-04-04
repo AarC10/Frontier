@@ -29,11 +29,14 @@ class FlightStateMachine {
   private:
     static constexpr float padBoostAccelGs = 2.0f;
     static constexpr uint32_t padBoostSustainedMs = 50U;
+    static constexpr float padBoostAltitudeGainM = 0.25f;
 
     static constexpr float boostCoastAccelGs = 1.5f;
 
     static constexpr float coastApogeeAccelGs = 1.0f;
     static constexpr uint32_t apogeeInhibitAfterBoostMs = 1000U;
+    static constexpr float apogeeDescentDeltaM = 1.0f;
+    static constexpr uint8_t apogeeDescendingSamplesRequired = 3U;
 
     static constexpr float descentLandedAccelGs = 0.1f;
     static constexpr uint32_t descentLandedAccelSustainMs = 3000U;
@@ -57,6 +60,11 @@ class FlightStateMachine {
 
     uint32_t descentAltitudeAnchorTimeMs{0U};
     float descentAltitudeAnchorM{0.0f};
+
+    float padAltitudeM{0.0f};
+    bool havePadAltitude{false};
+    float maxAltitudeM{0.0f};
+    uint8_t descendingSampleCount{0U};
 
     float lastPressureKPa{0.0f};
     bool haveLastPressure{false};
