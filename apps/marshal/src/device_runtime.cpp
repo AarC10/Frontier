@@ -9,6 +9,7 @@
 #include <core/flight_logger/FlightExporter.h>
 #include <core/flight_logger/FlightLogger.h>
 #include <cmath>
+#include <cstdlib>
 #include <core/io/Buzzer.h>
 #include <core/io/Led.h>
 #include <core/pyro/PyroController.h>
@@ -22,6 +23,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/flash_map.h>
+#ifdef CONFIG_SHELL
+#include <zephyr/shell/shell.h>
+#endif
 
 LOG_MODULE_DECLARE(marshal);
 
@@ -44,6 +48,7 @@ static PyroController droguePyro(drogueEnSpec, drogueFltSpec);
 static PyroController mainPyro(mainEnSpec, mainFltSpec);
 static bool armed = false;
 static FlightLogger* flightLogger = nullptr;
+static FlightExporter* flightExporter = nullptr;
 static FlightStateMachine* flightStateMachine = nullptr;
 static float padAltitudeM = 0.0f;
 static float currentAltitudeM = 0.0f;
@@ -251,6 +256,132 @@ static bool checkBatteryVoltage() {
     LOG_INF("Battery voltage OK: %u mV (threshold %u mV)", vbat, threshold);
     return true;
 }
+
+static int ensurePyrosArmed() {
+    if (armed) {
+        return 0;
+    }
+
+    if (!checkBatteryVoltage()) {
+        return -EIO;
+    }
+
+    int ret = droguePyro.arm();
+    if (ret != 0) {
+        LOG_ERR("Drogue pyro arm failed: %d", ret);
+        logPyroAction(1, FlightLog::PyroAction::FAULT);
+        return ret;
+    }
+    logPyroAction(1, FlightLog::PyroAction::ARM);
+
+    ret = mainPyro.arm();
+    if (ret != 0) {
+        LOG_ERR("Main pyro arm failed: %d", ret);
+        logPyroAction(2, FlightLog::PyroAction::FAULT);
+        return ret;
+    }
+    logPyroAction(2, FlightLog::PyroAction::ARM);
+
+    armed = true;
+    return 0;
+}
+
+#ifdef CONFIG_SHELL
+static int cmdTestLog(const struct shell* sh, size_t argc, char** argv) {
+    ARG_UNUSED(argc);
+
+    if (flightLogger == nullptr || flightExporter == nullptr) {
+        shell_error(sh, "Logger/exporter not initialized");
+        return -ENODEV;
+    }
+
+    if (flightLogger->isRecording()) {
+        shell_error(sh, "Flight logging already in progress");
+        return -EBUSY;
+    }
+
+    char* end = nullptr;
+    const unsigned long durationSeconds = strtoul(argv[1], &end, 10);
+    if (argv[1][0] == '\0' || end == nullptr || *end != '\0' || durationSeconds == 0UL) {
+        shell_error(sh, "Usage: test log <seconds>");
+        return -EINVAL;
+    }
+
+    const uint32_t flightId = FlightComputerSettings::incrementFlightCounter();
+    int ret = flightLogger->startFlight(flightId, kImuLoopRateHz, kBaroLoopRateHz);
+    if (ret != 0) {
+        shell_error(sh, "Failed to start logging: %d", ret);
+        return ret;
+    }
+
+    shell_print(sh, "Recording flight %u for %lu second(s)...", flightId, durationSeconds);
+    k_sleep(K_SECONDS(durationSeconds));
+    flightLogger->endFlight();
+    k_sleep(K_MSEC(100));
+
+    ret = flightExporter->scanFlights();
+    if (ret < 0) {
+        shell_error(sh, "Recorded flight %u but scan failed: %d", flightId, ret);
+        return ret;
+    }
+
+    ret = flightExporter->exportLatest();
+    if (ret == 0) {
+        shell_print(sh, "Flight %u recorded and exported to the FAT partition.", flightId);
+        return 0;
+    }
+
+    shell_error(sh, "Flight %u recorded but export failed: %d", flightId, ret);
+    return ret;
+}
+
+static int cmdTestDeploy(const struct shell* sh, size_t argc, char** argv) {
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    if (flightLogger == nullptr) {
+        shell_error(sh, "Logger not initialized");
+        return -ENODEV;
+    }
+
+    int ret = ensurePyrosArmed();
+    if (ret != 0) {
+        shell_error(sh, "Failed to arm pyros: %d", ret);
+        return ret;
+    }
+
+    shell_print(sh, "Firing drogue pyro");
+    ret = droguePyro.fire(kPyroFireDurationMs);
+    if (ret != 0) {
+        logPyroAction(1, FlightLog::PyroAction::FAULT);
+        shell_error(sh, "Drogue pyro fire failed: %d", ret);
+        return ret;
+    }
+    logPyroAction(1, FlightLog::PyroAction::FIRE);
+
+    k_sleep(K_MSEC(100));
+
+    shell_print(sh, "Firing main pyro");
+    ret = mainPyro.fire(kPyroFireDurationMs);
+    if (ret != 0) {
+        logPyroAction(2, FlightLog::PyroAction::FAULT);
+        shell_error(sh, "Main pyro fire failed: %d", ret);
+        return ret;
+    }
+    logPyroAction(2, FlightLog::PyroAction::FIRE);
+
+    shell_print(sh, "Pyro test complete");
+    return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(subTest,
+                               SHELL_CMD_ARG(log, NULL, "Record live data for N seconds, then export latest flight",
+                                             cmdTestLog, 2, 0),
+                               SHELL_CMD(deploy, NULL, "Arm and fire both pyro channels", cmdTestDeploy),
+                               SHELL_SUBCMD_SET_END);
+
+SHELL_CMD_REGISTER(test, &subTest, "Marshal test helpers", NULL);
+#endif
 #endif
 
 int initRuntime() {
@@ -280,6 +411,7 @@ int initRuntime() {
     static FlightLogger logger(rawFa);
     static FlightExporter exporter(rawFa, fatFa);
     flightLogger = &logger;
+    flightExporter = &exporter;
 
     if (rawFa != nullptr) {
         ret = flightLogger->init();
