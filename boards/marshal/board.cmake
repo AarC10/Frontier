@@ -2,7 +2,7 @@
 
 # keep first
 board_runner_args(stm32cubeprogrammer "--port=swd" "--reset-mode=hw")
-board_runner_args(jlink "--device=STM32G474CC" "--speed=4000")
+board_runner_args(jlink "--device=STM32G474RE" "--speed=4000")
 board_runner_args(probe-rs "--chip=stm32g474cctx")
 
 # keep first
