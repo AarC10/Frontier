@@ -151,6 +151,24 @@ float armingAltM() { return static_cast<float>(cfgArmingAlt) * FT_TO_M; }
 
 #ifdef CONFIG_SHELL
 
+static int cmdConfigRoot(const struct shell *sh, size_t argc, char **argv) {
+    ARG_UNUSED(argv);
+
+    if (argc != 1) {
+        shell_print(sh, "ERR invalid arguments");
+        return -EINVAL;
+    }
+
+    shell_print(sh, "supported mode");
+    shell_print(sh, "supported main_alt");
+    shell_print(sh, "supported arm_alt");
+    shell_print(sh, "supported apogee_delay");
+    shell_print(sh, "supported bat_min");
+    shell_print(sh, "identity marshal");
+
+    return 0;
+}
+
 static int cmdShow(const struct shell *sh, size_t argc, char **argv) {
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
@@ -183,16 +201,34 @@ static int cmdShow(const struct shell *sh, size_t argc, char **argv) {
 
 static int cmdMode(const struct shell *sh, size_t argc, char **argv) {
     if (strcmp(argv[1], "dual_deploy") == 0) {
-        return FlightComputerSettings::setDeployMode(FlightComputerSettings::DeployMode::DUAL_DEPLOY);
+        const int ret = FlightComputerSettings::setDeployMode(FlightComputerSettings::DeployMode::DUAL_DEPLOY);
+        if (ret == 0) {
+            shell_print(sh, "OK");
+        } else {
+            shell_error(sh, "ERR save failed");
+        }
+        return ret;
     }
     if (strcmp(argv[1], "drogue_only") == 0) {
-        return FlightComputerSettings::setDeployMode(FlightComputerSettings::DeployMode::DROGUE_ONLY);
+        const int ret = FlightComputerSettings::setDeployMode(FlightComputerSettings::DeployMode::DROGUE_ONLY);
+        if (ret == 0) {
+            shell_print(sh, "OK");
+        } else {
+            shell_error(sh, "ERR save failed");
+        }
+        return ret;
     }
     if (strcmp(argv[1], "main_only") == 0) {
-        return FlightComputerSettings::setDeployMode(FlightComputerSettings::DeployMode::MAIN_ONLY);
+        const int ret = FlightComputerSettings::setDeployMode(FlightComputerSettings::DeployMode::MAIN_ONLY);
+        if (ret == 0) {
+            shell_print(sh, "OK");
+        } else {
+            shell_error(sh, "ERR save failed");
+        }
+        return ret;
     }
 
-    shell_error(sh, "Invalid mode '%s'. Use: dual_deploy, drogue_only, main_only", argv[1]);
+    shell_error(sh, "ERR invalid mode");
     return -EINVAL;
 }
 
@@ -200,13 +236,15 @@ static int cmdMainAlt(const struct shell *sh, size_t argc, char **argv) {
     char *end;
     const unsigned long alt = strtoul(argv[1], &end, 10);
     if (*end != '\0' || alt > 30000) {
-        shell_error(sh, "Invalid altitude '%s' (0-30000 ft)", argv[1]);
+        shell_error(sh, "ERR invalid main_alt");
         return -EINVAL;
     }
 
     const int ret = FlightComputerSettings::setMainDeployAltFt(static_cast<uint16_t>(alt));
     if (ret == 0) {
-        shell_print(sh, "Main deploy altitude set: %lu ft", alt);
+        shell_print(sh, "OK");
+    } else {
+        shell_error(sh, "ERR save failed");
     }
     return ret;
 }
@@ -215,13 +253,15 @@ static int cmdArmAlt(const struct shell *sh, size_t argc, char **argv) {
     char *end;
     const unsigned long alt = strtoul(argv[1], &end, 10);
     if (*end != '\0' || alt > 3000) {
-        shell_error(sh, "Invalid altitude '%s' (0-3000 ft)", argv[1]);
+        shell_error(sh, "ERR invalid arm_alt");
         return -EINVAL;
     }
 
     const int ret = FlightComputerSettings::setArmingAltFt(static_cast<uint16_t>(alt));
     if (ret == 0) {
-        shell_print(sh, "Arming altitude set: %lu ft", alt);
+        shell_print(sh, "OK");
+    } else {
+        shell_error(sh, "ERR save failed");
     }
     return ret;
 }
@@ -230,13 +270,15 @@ static int cmdApogeeDelay(const struct shell *sh, size_t argc, char **argv) {
     char *end;
     const unsigned long delay = strtoul(argv[1], &end, 10);
     if (*end != '\0' || delay > 30000) {
-        shell_error(sh, "Invalid delay '%s' (0-30000 ms)", argv[1]);
+        shell_error(sh, "ERR invalid apogee_delay");
         return -EINVAL;
     }
 
     const int ret = FlightComputerSettings::setApogeeDelayMs(static_cast<uint16_t>(delay));
     if (ret == 0) {
-        shell_print(sh, "Apogee delay set: %lu ms", delay);
+        shell_print(sh, "OK");
+    } else {
+        shell_error(sh, "ERR save failed");
     }
     return ret;
 }
@@ -245,13 +287,15 @@ static int cmdBatMin(const struct shell *sh, size_t argc, char **argv) {
     char *end;
     const unsigned long mv = strtoul(argv[1], &end, 10);
     if (*end != '\0' || mv > 10000) {
-        shell_error(sh, "Invalid voltage '%s' (0-10000 mV)", argv[1]);
+        shell_error(sh, "ERR invalid bat_min");
         return -EINVAL;
     }
 
     const int ret = FlightComputerSettings::setMinBatteryMv(static_cast<uint16_t>(mv));
     if (ret == 0) {
-        shell_print(sh, "Min battery voltage set: %lu mV", mv);
+        shell_print(sh, "OK");
+    } else {
+        shell_error(sh, "ERR save failed");
     }
     return ret;
 }
@@ -276,7 +320,7 @@ static int cmdDefaults(const struct shell *sh, size_t argc, char **argv) {
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
-    subFc, SHELL_CMD(show, NULL, "Display current settings", cmdShow),
+    subConfig, SHELL_CMD(show, NULL, "Display current settings", cmdShow),
     SHELL_CMD_ARG(mode, NULL, "Set deploy mode (dual_deploy|drogue_only|main_only)", cmdMode, 2, 0),
     SHELL_CMD_ARG(main_alt, NULL, "Set main deploy altitude in feet AGL (default 500)", cmdMainAlt, 2, 0),
     SHELL_CMD_ARG(arm_alt, NULL, "Set arming altitude in feet AGL (default 100)", cmdArmAlt, 2, 0),
@@ -284,6 +328,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
     SHELL_CMD_ARG(bat_min, NULL, "Set minimum battery voltage lockout in mV (default 3300)", cmdBatMin, 2, 0),
     SHELL_CMD(defaults, NULL, "Reset all settings to defaults", cmdDefaults), SHELL_SUBCMD_SET_END);
 
-SHELL_CMD_REGISTER(fc, &subFc, "Flight computer settings", NULL);
+SHELL_CMD_ARG_REGISTER(config, &subConfig, "Flight computer settings", cmdConfigRoot, 1, 0);
 
 #endif // CONFIG_SHELL

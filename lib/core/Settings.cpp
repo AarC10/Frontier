@@ -117,6 +117,41 @@ int saveNodeId(uint8_t nodeId) {
 
 #ifdef CONFIG_SHELL
 
+static const char *deviceIdentity() {
+#if defined(CONFIG_BOARD_OUTLAW_GEN3)
+    return "outlaw";
+#elif defined(CONFIG_BOARD_HUNTER_GEN2) || defined(CONFIG_BOARD_HUNTER)
+    return "hunter";
+#else
+    return nullptr;
+#endif
+}
+
+static int cmd_config_root(const struct shell *sh, size_t argc, char **argv) {
+    ARG_UNUSED(argv);
+
+    if (argc != 1) {
+        shell_print(sh, "ERR invalid arguments");
+        return -EINVAL;
+    }
+
+#ifdef CONFIG_SHELL_FREQUENCY
+    shell_print(sh, "supported freq");
+#endif
+#ifdef CONFIG_SHELL_NODE_ID
+    shell_print(sh, "supported node_id");
+#endif
+#ifdef CONFIG_LICENSED_FREQUENCY
+    shell_print(sh, "supported callsign");
+#endif
+
+    if (const char *identity = deviceIdentity(); identity != nullptr) {
+        shell_print(sh, "identity %s", identity);
+    }
+
+    return 0;
+}
+
 #ifdef CONFIG_SHELL_FREQUENCY
 static int cmd_freq(const struct shell *sh, size_t argc, char **argv) {
     char *end;
@@ -171,7 +206,7 @@ static int cmd_callsign(const struct shell *sh, size_t argc, char **argv) {
 static int cmd_node_id(const struct shell *sh, size_t argc, char **argv) {
     char *end;
     const unsigned long id = strtoul(argv[1], &end, 10);
-    if (*end != '\0' || id < 0 || id > 9) {
+    if (*end != '\0' || id > 9) {
         shell_error(sh, "Invalid node ID '%s' (expected 0-9)", argv[1]);
         return -EINVAL;
     }
@@ -201,7 +236,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config,
 #endif
                                SHELL_SUBCMD_SET_END);
 
-SHELL_CMD_REGISTER(config, &sub_config, "Configure settings", NULL);
+SHELL_CMD_ARG_REGISTER(config, &sub_config, "Configure settings", cmd_config_root, 1, 0);
 
 #endif
 
