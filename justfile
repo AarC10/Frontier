@@ -64,6 +64,9 @@ run-outlaw-sim:
 run-hunter-sim:
     ./builds/hunter-sim/zephyr/zephyr.exe
 
+sim-stream input format="openrocket":
+    python tools/sim_stream.py {{input}} --format {{format}}
+
 # Flash with ST-Link
 # Usage: just sflash outlaw | just sflash hunter
 sflash target:

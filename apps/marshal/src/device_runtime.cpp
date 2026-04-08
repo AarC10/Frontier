@@ -27,6 +27,10 @@
 #include <zephyr/shell/shell.h>
 #endif
 
+#ifdef CONFIG_BOARD_NATIVE_SIM
+extern "C" void sim_pipe_reader_start(void);
+#endif
+
 LOG_MODULE_DECLARE(marshal);
 
 namespace marshal {
@@ -494,6 +498,8 @@ void startRuntimeThreads() {
 
     k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
+#else
+    sim_pipe_reader_start();
 #endif
 }
 
