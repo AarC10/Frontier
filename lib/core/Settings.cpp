@@ -121,8 +121,17 @@ int saveNodeId(uint8_t nodeId) {
 static int cmd_freq(const struct shell *sh, size_t argc, char **argv) {
     char *end;
     const float freq = strtof(argv[1], &end);
-    if (*end != '\0' || freq < 902.0f || freq > 928.0f) {
-        shell_error(sh, "Invalid frequency '%s' (902.0 - 928.0)", argv[1]);
+#ifdef CONFIG_LICENSED_FREQUENCY
+    constexpr float minFreqMhz = 410.0f;
+    constexpr float maxFreqMhz = 450.0f;
+#else
+    constexpr float minFreqMhz = 902.0f;
+    constexpr float maxFreqMhz = 928.0f;
+#endif
+
+    if (*end != '\0' || freq < minFreqMhz || freq > maxFreqMhz) {
+        shell_error(sh, "Invalid frequency '%s' (%.1f - %.1f)", argv[1], static_cast<double>(minFreqMhz),
+                    static_cast<double>(maxFreqMhz));
         return -EINVAL;
     }
     const int ret = Settings::saveFrequency(static_cast<uint32_t>(freq * 1'000'000));

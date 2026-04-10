@@ -14,14 +14,13 @@
 LOG_MODULE_REGISTER(main);
 
 int main(void) {
-    // Settings::load();
-    // float freqMHz = static_cast<float>(OutlawSettings::getFrequency()) /
-    // 1'000'000;
-#ifdef CONFIG_LICENSED_FREQUENCY
-    float freqMhz = 435.0f;
-#else
-    float freqMhz = 903.0f;
-#endif
+    const int ret = Settings::load();
+    if (ret != 0) {
+        LOG_ERR("Settings::load failed: %d", ret);
+    }
+
+    const uint32_t freqHz = Settings::getFrequency();
+    const float freqMhz = static_cast<float>(freqHz) / 1'000'000.0f;
     LoraTransceiver lora(0, freqMhz);
     lora.awaitRxPacket();
 

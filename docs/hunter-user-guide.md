@@ -7,8 +7,9 @@
 1. [Before You Power On](#before-you-power-on)
 2. [Setup](#setup)
 3. [Frequency Variants](#frequency-variants)
-4. [Reading the Raw UART Stream](#reading-the-raw-uart-stream)
-5. [Troubleshooting](#troubleshooting)
+4. [Configuring with the UART Shell](#configuring-with-the-uart-shell)
+5. [Reading the Raw UART Stream](#reading-the-raw-uart-stream)
+6. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -41,7 +42,49 @@ Hunter must be on the same frequency variant as the Outlaw trackers you are rece
 | Standard | 903.000 MHz |
 | Licensed | 435.000 MHz |
 
-> At the time of writing, the frequency variant is fixed at the time of programming and can't be changed by the user without re-flashing the firmware. This will resolved in a future hardware revision.
+Hunter stores its receive frequency in persistent flash and can be reconfigured over the UART shell. The build variant still sets the allowed band:
+
+- Standard builds can be tuned within `902.0` to `928.0` MHz
+- Licensed builds can be tuned within `410.0` to `450.0` MHz
+
+Hunter and the Outlaw trackers you want to receive still need to be on the same frequency.
+
+---
+
+## Configuring with the UART Shell
+
+Hunter exposes a text shell over its USB serial port, which you can use to change the receive frequency without reflashing the firmware.
+
+**What you need:**
+
+- A computer with a terminal application such as PuTTY, Screen, minicom, or similar
+- A USB-C cable connected to Hunter
+
+**Connecting:**
+
+Open the Hunter serial port at **115200 baud**. On connection you should see:
+
+```
+uart:~$
+```
+
+If no prompt appears immediately, press Enter once.
+
+**Available command:**
+
+Set the receive frequency:
+
+```
+uart:~$ config freq 903.125000
+```
+
+On licensed builds, pick a frequency within the licensed band instead, for example:
+
+```
+uart:~$ config freq 435.000000
+```
+
+The frequency is saved automatically and persists across reboots. Changes take effect after a reset or power cycle.
 
 ---
 
@@ -116,4 +159,3 @@ You can reference the [Dispatch user guide](https://github.com/AarC10/Dispatch-G
 - Try clicking the port refresh icon and re-selecting the port before clicking Connect.
 
 ---
-
