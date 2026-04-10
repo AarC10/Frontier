@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <marshal/device_runtime.h>
-
+#include <cmath>
 #include <core/flight/FlightStateMachine.h>
 #include <core/flight_logger/FlightExporter.h>
 #include <core/flight_logger/FlightLogger.h>
-#include <cmath>
-#include <cstdlib>
 #include <core/io/Buzzer.h>
 #include <core/io/Led.h>
 #include <core/pyro/PyroController.h>
@@ -17,6 +14,8 @@
 #include <core/sensors/Imu.h>
 #include <core/sensors/VoltageMonitor.h>
 #include <core/settings/FlightComputerSettings.h>
+#include <cstdlib>
+#include <marshal/device_runtime.h>
 #include <marshal/usb_support.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
@@ -25,6 +24,10 @@
 #include <zephyr/storage/flash_map.h>
 #ifdef CONFIG_SHELL
 #include <zephyr/shell/shell.h>
+#endif
+
+#ifdef CONFIG_BOARD_NATIVE_SIM
+extern "C" void sim_pipe_reader_start(void);
 #endif
 
 LOG_MODULE_DECLARE(marshal);
@@ -115,31 +118,31 @@ static void maybeRunDeployments() {
     const bool apogeeDelayElapsed = (now - apogeeTimeMs) >= FlightComputerSettings::apogeeDelayMs();
 
     switch (mode) {
-    case FlightComputerSettings::DeployMode::DUAL_DEPLOY:
-        if (!drogueDeployIssued && apogeeDelayElapsed) {
-            requestPyroDeploy(droguePyro, 1, "apogee drogue");
-            drogueDeployIssued = true;
-        }
+        case FlightComputerSettings::DeployMode::DUAL_DEPLOY:
+            if (!drogueDeployIssued && apogeeDelayElapsed) {
+                requestPyroDeploy(droguePyro, 1, "apogee drogue");
+                drogueDeployIssued = true;
+            }
 
-        if (!mainDeployIssued && currentAltitudeM <= FlightComputerSettings::mainDeployAltM()) {
-            requestPyroDeploy(mainPyro, 2, "main deploy altitude");
-            mainDeployIssued = true;
-        }
-        break;
+            if (!mainDeployIssued && currentAltitudeM <= FlightComputerSettings::mainDeployAltM()) {
+                requestPyroDeploy(mainPyro, 2, "main deploy altitude");
+                mainDeployIssued = true;
+            }
+            break;
 
-    case FlightComputerSettings::DeployMode::DROGUE_ONLY:
-        if (!drogueDeployIssued && apogeeDelayElapsed) {
-            requestPyroDeploy(droguePyro, 1, "apogee drogue");
-            drogueDeployIssued = true;
-        }
-        break;
+        case FlightComputerSettings::DeployMode::DROGUE_ONLY:
+            if (!drogueDeployIssued && apogeeDelayElapsed) {
+                requestPyroDeploy(droguePyro, 1, "apogee drogue");
+                drogueDeployIssued = true;
+            }
+            break;
 
-    case FlightComputerSettings::DeployMode::MAIN_ONLY:
-        if (!mainDeployIssued) {
-            requestPyroDeploy(mainPyro, 2, "main-only apogee deploy");
-            mainDeployIssued = true;
-        }
-        break;
+        case FlightComputerSettings::DeployMode::MAIN_ONLY:
+            if (!mainDeployIssued) {
+                requestPyroDeploy(mainPyro, 2, "main-only apogee deploy");
+                mainDeployIssued = true;
+            }
+            break;
     }
 }
 
@@ -374,11 +377,9 @@ static int cmdTestDeploy(const struct shell* sh, size_t argc, char** argv) {
     return 0;
 }
 
-SHELL_STATIC_SUBCMD_SET_CREATE(subTest,
-                               SHELL_CMD_ARG(log, NULL, "Record live data for N seconds, then export latest flight",
-                                             cmdTestLog, 2, 0),
-                               SHELL_CMD(deploy, NULL, "Arm and fire both pyro channels", cmdTestDeploy),
-                               SHELL_SUBCMD_SET_END);
+SHELL_STATIC_SUBCMD_SET_CREATE(
+    subTest, SHELL_CMD_ARG(log, NULL, "Record live data for N seconds, then export latest flight", cmdTestLog, 2, 0),
+    SHELL_CMD(deploy, NULL, "Arm and fire both pyro channels", cmdTestDeploy), SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(test, &subTest, "Marshal test helpers", NULL);
 #endif
@@ -494,10 +495,13 @@ void startRuntimeThreads() {
 
     k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
+#else
+    sim_pipe_reader_start();
 #endif
 }
 
 void runStatusLoop() {
+    // buzzer.beep(3000);
     while (true) {
         statusLed.toggle();
         k_msleep(1000);

@@ -4,7 +4,6 @@
  */
 
 #include <marshal/usb_support.h>
-
 #include <zephyr/device.h>
 
 #if defined(CONFIG_USB_DEVICE_STACK_NEXT)
