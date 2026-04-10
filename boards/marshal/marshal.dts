@@ -5,6 +5,7 @@
 #include <zephyr/dt-bindings/adc/adc.h>
 #include <zephyr/dt-bindings/pwm/pwm.h>
 #include <zephyr/dt-bindings/sensor/lsm6dsv16x.h>
+#include <zephyr/dt-bindings/usb-c/pd.h>
 
 / {
 	model = "Marshal Flight Computer";
@@ -88,6 +89,29 @@
 		full-ohms = <168000>;
 	};
 
+	usb_vbus: usb_vbus {
+		compatible = "zephyr,usb-c-vbus-adc";
+		io-channels = <&adc1 2>;
+		output-ohms = <68000>;
+		full-ohms = <168000>;
+	};
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		usbc_port0: usbc-port@0 {
+			compatible = "usb-c-connector";
+			reg = <0>;
+			tcpc = <&ucpd1>;
+			vbus = <&usb_vbus>;
+			power-role = "sink";
+			data-role = "device";
+			sink-pdos = <PDO_FIXED(5000, 500, PDO_FIXED_USB_COMM)>;
+			op-sink-microwatt = <2500000>;
+		};
+	};
+
 	aliases {
 		led = &led0;
 		buzzer = &buzzer;
@@ -104,6 +128,7 @@
 		v3v3-sense = &v3v3_sense;
 		vbat-sensor = &vbat_sensor;
 		vcc-sensor = &vcc_sensor;
+		usbc-port0 = &usbc_port0;
 //		fat-disk = &flashdisk0;
 //		fatfs0 = &fatfs0;
 	};
@@ -153,6 +178,7 @@
 	hbitclkdiv = <27>;
 	pinctrl-0 = <&ucpd1_cc1_pb6 &ucpd1_cc2_pb4>;
 	pinctrl-names = "default";
+	dead-battery;
 	status = "okay";
 };
 
