@@ -16,6 +16,7 @@ inline constexpr uint8_t NOFIX[] = "NOFIX";
 struct GnssInfo {
     int32_t latitude{0};
     int32_t longitude{0};
+    int16_t altitude_m{0};
     uint8_t satellites_cnt{0};
     uint8_t fix_status{0};
 };
@@ -26,7 +27,7 @@ struct LoraFrame {
 #ifdef CONFIG_LICENSED_FREQUENCY
     char callsign[CALLSIGN_CHAR_COUNT]{0};
 #endif
-    uint8_t version{0x01};
+    uint8_t version{0x02};
     uint8_t node_id{0};
     GnssInfo gnssInfo{};
 };

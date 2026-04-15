@@ -4,7 +4,10 @@
 #include "zephyr/drivers/gnss.h"
 #include "zephyr/logging/log.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <climits>
 #include <cstring>
 
 LOG_MODULE_REGISTER(LoraTransceiver);
@@ -19,6 +22,15 @@ static void loraReceiveCallback(const device *dev, uint8_t *data, uint16_t size,
 static int32_t nanoToMicro(const int64_t nano) { return static_cast<int32_t>(nano / 1'000); }
 
 static double microToDeg(const int32_t micro) { return static_cast<double>(micro) / 1'000'000.0; }
+
+static int16_t millimetersToMeters(const int32_t millimeters) {
+    const int32_t meters = millimeters / 1'000;
+    return static_cast<int16_t>(std::clamp<int32_t>(meters, INT16_MIN, INT16_MAX));
+}
+
+static int32_t metersToFeet(const int16_t meters) {
+    return static_cast<int32_t>(std::lround(static_cast<double>(meters) * 3.28084));
+}
 
 LoraTransceiver::LoraTransceiver(const uint8_t nodeId, const float frequencyMHz) : nodeId(nodeId) {
     config.frequency = static_cast<uint32_t>(frequencyMHz * 1'000'000);
@@ -44,6 +56,7 @@ bool LoraTransceiver::txGnssPayload(const gnss_data &gnssData) {
     packet.node_id = nodeId;
     packet.gnssInfo.latitude = nanoToMicro(gnssData.nav_data.latitude);
     packet.gnssInfo.longitude = nanoToMicro(gnssData.nav_data.longitude);
+    packet.gnssInfo.altitude_m = millimetersToMeters(gnssData.nav_data.altitude);
     packet.gnssInfo.satellites_cnt = static_cast<uint8_t>(gnssData.info.satellites_cnt);
     packet.gnssInfo.fix_status = gnssData.info.fix_status;
 
@@ -190,6 +203,7 @@ void LoraTransceiver::parseLoraFrame(const LoraFrame &frame, const size_t size, 
 #endif
     LOG_INF("\tLatitude: %f", microToDeg(frame.gnssInfo.latitude));
     LOG_INF("\tLongitude: %f", microToDeg(frame.gnssInfo.longitude));
+    LOG_INF("\tAltitude: %d ft", metersToFeet(frame.gnssInfo.altitude_m));
     LOG_INF("\tSatellites count: %u", frame.gnssInfo.satellites_cnt);
     switch (frame.gnssInfo.fix_status) {
         case GNSS_FIX_STATUS_NO_FIX:
