@@ -95,17 +95,18 @@ static void resetFlightActions() {
     mainDeployIssued = false;
 }
 
+static int ensurePyrosArmed();
+
 static void requestPyroDeploy(PyroController& controller, uint8_t channel, const char* reason) {
-    ARG_UNUSED(controller);
+    const int ret = controller.fire(kPyroFireDurationMs);
+    if (ret != 0) {
+        LOG_ERR("Pyro channel %u fire failed during %s: %d", channel, reason, ret);
+        logPyroAction(channel, FlightLog::PyroAction::FAULT);
+        return;
+    }
 
-    LOG_WRN("Pyro channel %u deploy requested (%s, nominal pulse=%u ms), but fire() is intentionally stubbed", channel,
-            reason, kPyroFireDurationMs);
+    LOG_WRN("Pyro channel %u fired for %u ms (%s)", channel, kPyroFireDurationMs, reason);
     logPyroAction(channel, FlightLog::PyroAction::FIRE);
-
-    // const int ret = controller.fire(kPyroFireDurationMs);
-    // if (ret != 0) {
-    //     LOG_ERR("Pyro channel %u fire failed: %d", channel, ret);
-    // }
 }
 
 static void maybeRunDeployments() {
@@ -147,7 +148,7 @@ static void maybeRunDeployments() {
 }
 
 static void handleStateChange(FlightState oldState, FlightState newState) {
-    if (newState == FlightState::BOOST && armed && flightLogger != nullptr && !flightLogger->isRecording()) {
+    if (newState == FlightState::BOOST && flightLogger != nullptr && !flightLogger->isRecording()) {
         resetFlightActions();
         const uint32_t id = FlightComputerSettings::incrementFlightCounter();
         const int ret = flightLogger->startFlight(id, kImuLoopRateHz, kBaroLoopRateHz);
@@ -155,6 +156,13 @@ static void handleStateChange(FlightState oldState, FlightState newState) {
             LOG_ERR("Failed to start flight logging for flight %u: %d", id, ret);
         } else {
             LOG_INF("Flight %u logging started", id);
+        }
+    }
+
+    if (newState == FlightState::BOOST) {
+        const int ret = ensurePyrosArmed();
+        if (ret != 0) {
+            LOG_ERR("Pyro arming failed at boost detect: %d", ret);
         }
     }
 
@@ -206,8 +214,6 @@ static void baroThreadEntry(void*, void*, void*) {
 
         const uint32_t pressureMilliKpa = sensorValueMilli(latestBaroSample.pressure);
         const float absoluteAltitudeM = pressureKPaToAltitudeM(static_cast<float>(pressureMilliKpa) / 1000.0f);
-        const uint32_t altitudeMm = static_cast<uint32_t>(absoluteAltitudeM * 1000.0f);
-        const int32_t tempMilliC = latestBaroSample.temperature.val1 * 1000 + latestBaroSample.temperature.val2 / 1000;
         currentAltitudeM = absoluteAltitudeM - padAltitudeM;
 
         if (state == FlightState::PAD) {
@@ -219,7 +225,6 @@ static void baroThreadEntry(void*, void*, void*) {
 
         maybeRunDeployments();
 
-        const int32_t aglMilliM = static_cast<int32_t>(currentAltitudeM * 1000.0f);
         // LOG_INF("Flight state=%u pressure=%u.%03u kPa altitude=%u.%03u m agl=%d.%03d m temp=%d.%03d C",
         //         static_cast<unsigned>(state), pressureMilliKpa / 1000, pressureMilliKpa % 1000, altitudeMm / 1000,
         //         altitudeMm % 1000, aglMilliM / 1000, std::abs(aglMilliM % 1000), tempMilliC / 1000,
@@ -450,32 +455,14 @@ int initRuntime() {
         LOG_ERR("Voltage monitor init failed: %d", ret);
     }
 
-    armed = checkBatteryVoltage();
-
     ret = droguePyro.init();
     if (ret != 0) {
         LOG_ERR("Drogue pyro init failed: %d", ret);
-    } else if (armed) {
-        ret = droguePyro.arm();
-        if (ret != 0) {
-            LOG_ERR("Drogue pyro arm failed: %d", ret);
-            logPyroAction(1, FlightLog::PyroAction::FAULT);
-        } else {
-            logPyroAction(1, FlightLog::PyroAction::ARM);
-        }
     }
 
     ret = mainPyro.init();
     if (ret != 0) {
         LOG_ERR("Main pyro init failed: %d", ret);
-    } else if (armed) {
-        ret = mainPyro.arm();
-        if (ret != 0) {
-            LOG_ERR("Main pyro arm failed: %d", ret);
-            logPyroAction(2, FlightLog::PyroAction::FAULT);
-        } else {
-            logPyroAction(2, FlightLog::PyroAction::ARM);
-        }
     }
 
     static FlightStateMachine fsm(barometer, imu);

@@ -22,6 +22,49 @@ LOG_MODULE_REGISTER(FlightExporter, LOG_LEVEL_INF);
 static constexpr size_t COPY_BUF_SIZE = 512;
 static const char *const FAT_MOUNT = "/marshal:";
 
+namespace {
+
+constexpr uint32_t kFlightLogPageSize = 256U;
+
+bool scanPageForRecords(const flash_area *flashArea, uint32_t pageBase, uint32_t partSize, uint32_t &consumedBytes) {
+	consumedBytes = 0U;
+
+	while (consumedBytes < kFlightLogPageSize && (pageBase + consumedBytes) < partSize) {
+		uint8_t probe[2] = {0xFF, 0xFF};
+		const int ret = flash_area_read(flashArea, pageBase + consumedBytes, probe, sizeof(probe));
+		if (ret != 0) {
+			LOG_ERR("Flash read error at 0x%08X: %d", pageBase + consumedBytes, ret);
+			return false;
+		}
+
+		if (probe[0] == 0xFF) {
+			return true;
+		}
+
+		if (probe[0] != FlightLog::RECORD_MAGIC) {
+			LOG_WRN("Corruption at 0x%08X, stopping scan", pageBase + consumedBytes);
+			return false;
+		}
+
+		const size_t recSize = FlightLog::recordSizeFromRaw(probe[1]);
+		if (recSize == 0U) {
+			LOG_WRN("Unknown type 0x%02X at 0x%08X, stopping scan", probe[1], pageBase + consumedBytes);
+			return false;
+		}
+
+		if ((consumedBytes + recSize) > kFlightLogPageSize || (pageBase + consumedBytes + recSize) > partSize) {
+			LOG_WRN("Record at 0x%08X overflows page or partition, stopping scan", pageBase + consumedBytes);
+			return false;
+		}
+
+		consumedBytes += static_cast<uint32_t>(recSize);
+	}
+
+	return true;
+}
+
+} // namespace
+
 static uint8_t __aligned(4) fatFsData[1024];
 static struct fs_mount_t fatMnt = {
 	.type = FS_FATFS,
@@ -93,83 +136,104 @@ int FlightExporter::scanFlights() {
 	}
 
 	numFlights = 0;
-	uint32_t offset = 0;
+	uint32_t pageBase = 0;
 	const uint32_t partSize = rawFa->fa_size;
 	int currentFlight = -1;
 
-	while (offset < partSize) {
-		uint8_t probe[2];
-		int ret = flash_area_read(rawFa, offset, probe, 2);
+	while (pageBase < partSize) {
+		uint8_t firstByte = 0xFF;
+		int ret = flash_area_read(rawFa, pageBase, &firstByte, 1);
 		if (ret != 0) {
-			LOG_ERR("Flash read error at 0x%08X: %d", offset, ret);
+			LOG_ERR("Flash read error at 0x%08X: %d", pageBase, ret);
 			return ret;
 		}
 
-		if (probe[0] == 0xFF) {
+		if (firstByte == 0xFF) {
 			break;
 		}
 
-		if (probe[0] != FlightLog::RECORD_MAGIC) {
-			LOG_WRN("Corruption at 0x%08X, stopping scan", offset);
-			break;
-		}
-
-		const uint8_t typeByte = probe[1];
-		const size_t recSize = FlightLog::recordSizeFromRaw(typeByte);
-		if (recSize == 0) {
-			LOG_WRN("Unknown type 0x%02X at 0x%08X, stopping scan",
-				typeByte, offset);
-			break;
-		}
-
-		if (offset + recSize > partSize) {
-			break;
-		}
-
-		const auto type = static_cast<FlightLog::RecordType>(typeByte);
-
-		if (type == FlightLog::RecordType::FLIGHT_HEADER) {
-			FlightLog::FlightHeaderRecord hdr{};
-			ret = flash_area_read(rawFa, offset, &hdr, sizeof(hdr));
+		uint32_t pageOffset = 0U;
+		while (pageOffset < kFlightLogPageSize && (pageBase + pageOffset) < partSize) {
+			uint8_t probe[2] = {0xFF, 0xFF};
+			ret = flash_area_read(rawFa, pageBase + pageOffset, probe, sizeof(probe));
 			if (ret != 0) {
-				LOG_ERR("Failed to read flight header at 0x%08X", offset);
+				LOG_ERR("Flash read error at 0x%08X: %d", pageBase + pageOffset, ret);
+				return ret;
+			}
+
+			if (probe[0] == 0xFF) {
 				break;
+			}
+
+			if (probe[0] != FlightLog::RECORD_MAGIC) {
+				LOG_WRN("Corruption at 0x%08X, stopping scan", pageBase + pageOffset);
+				goto scan_done;
+			}
+
+			const uint8_t typeByte = probe[1];
+			const size_t recSize = FlightLog::recordSizeFromRaw(typeByte);
+			if (recSize == 0) {
+				LOG_WRN("Unknown type 0x%02X at 0x%08X, stopping scan", typeByte, pageBase + pageOffset);
+				goto scan_done;
+			}
+
+			if ((pageOffset + recSize) > kFlightLogPageSize || (pageBase + pageOffset + recSize) > partSize) {
+				LOG_WRN("Record at 0x%08X overflows page or partition, stopping scan", pageBase + pageOffset);
+				goto scan_done;
+			}
+
+			const auto type = static_cast<FlightLog::RecordType>(typeByte);
+
+			if (type == FlightLog::RecordType::FLIGHT_HEADER) {
+				FlightLog::FlightHeaderRecord hdr{};
+				ret = flash_area_read(rawFa, pageBase + pageOffset, &hdr, sizeof(hdr));
+				if (ret != 0) {
+					LOG_ERR("Failed to read flight header at 0x%08X", pageBase + pageOffset);
+					goto scan_done;
+				}
+
+				if (currentFlight >= 0) {
+					flightList[currentFlight].endOffset = pageBase + pageOffset;
+				}
+
+				if (numFlights >= MAX_FLIGHTS) {
+					LOG_WRN("Max flights (%zu) reached, stopping scan", MAX_FLIGHTS);
+					goto scan_done;
+				}
+
+				currentFlight = static_cast<int>(numFlights);
+				FlightInfo &info = flightList[numFlights];
+				info.flightId = hdr.flightId;
+				info.startOffset = pageBase + pageOffset;
+				info.endOffset = 0;
+				info.epochUptimeMs = hdr.epochUptimeMillis;
+				info.recordCount = 0;
+				info.hasFlightEnd = false;
+				numFlights++;
+			}
+
+			if (type == FlightLog::RecordType::FLIGHT_END && currentFlight >= 0) {
+				flightList[currentFlight].hasFlightEnd = true;
 			}
 
 			if (currentFlight >= 0) {
-				flightList[currentFlight].endOffset = offset;
+				flightList[currentFlight].recordCount++;
 			}
 
-			if (numFlights >= MAX_FLIGHTS) {
-				LOG_WRN("Max flights (%zu) reached, stopping scan",
-					MAX_FLIGHTS);
-				break;
-			}
-
-			currentFlight = static_cast<int>(numFlights);
-			FlightInfo &info = flightList[numFlights];
-			info.flightId = hdr.flightId;
-			info.startOffset = offset;
-			info.endOffset = 0;
-			info.epochUptimeMs = hdr.epochUptimeMillis;
-			info.recordCount = 0;
-			info.hasFlightEnd = false;
-			numFlights++;
+			pageOffset += static_cast<uint32_t>(recSize);
 		}
 
-		if (type == FlightLog::RecordType::FLIGHT_END && currentFlight >= 0) {
-			flightList[currentFlight].hasFlightEnd = true;
+		uint32_t consumedBytes = 0U;
+		if (!scanPageForRecords(rawFa, pageBase, partSize, consumedBytes)) {
+			break;
 		}
 
-		if (currentFlight >= 0) {
-			flightList[currentFlight].recordCount++;
-		}
-
-		offset += recSize;
+		pageBase += kFlightLogPageSize;
 	}
 
+scan_done:
 	if (currentFlight >= 0 && flightList[currentFlight].endOffset == 0) {
-		flightList[currentFlight].endOffset = offset;
+		flightList[currentFlight].endOffset = pageBase;
 	}
 
 	LOG_INF("Scan complete: %zu flight(s) found", numFlights);

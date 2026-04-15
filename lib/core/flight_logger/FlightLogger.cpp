@@ -14,6 +14,49 @@
 
 LOG_MODULE_REGISTER(FlightLogger, LOG_LEVEL_INF);
 
+namespace {
+
+constexpr uint32_t kPageSize = 256U;
+
+bool scanPageForRecords(const flash_area *flashArea, uint32_t pageBase, uint32_t partSize, uint32_t &consumedBytes) {
+    consumedBytes = 0U;
+
+    while (consumedBytes < kPageSize && (pageBase + consumedBytes) < partSize) {
+        uint8_t probe[2] = {0xFF, 0xFF};
+        const int ret = flash_area_read(flashArea, pageBase + consumedBytes, probe, sizeof(probe));
+        if (ret != 0) {
+            LOG_ERR("Flash read error at offset 0x%08X: %d", pageBase + consumedBytes, ret);
+            return false;
+        }
+
+        if (probe[0] == 0xFF) {
+            return true;
+        }
+
+        if (probe[0] != FlightLog::RECORD_MAGIC) {
+            LOG_WRN("Corruption at 0x%08X (0x%02X)", pageBase + consumedBytes, probe[0]);
+            return false;
+        }
+
+        const size_t recSize = FlightLog::recordSizeFromRaw(probe[1]);
+        if (recSize == 0U) {
+            LOG_WRN("Unknown type 0x%02X at 0x%08X", probe[1], pageBase + consumedBytes);
+            return false;
+        }
+
+        if ((consumedBytes + recSize) > kPageSize || (pageBase + consumedBytes + recSize) > partSize) {
+            LOG_WRN("Record at 0x%08X overflows page or partition", pageBase + consumedBytes);
+            return false;
+        }
+
+        consumedBytes += static_cast<uint32_t>(recSize);
+    }
+
+    return true;
+}
+
+} // namespace
+
 static inline float svToFloat(const sensor_value &sv) {
     return static_cast<float>(sv.val1) + static_cast<float>(sv.val2) / 1000000.0f;
 }
@@ -373,55 +416,28 @@ void FlightLogger::submitRecord(const void *record, size_t len) {
 }
 
 int FlightLogger::scanForWritePointer() {
-    // Jump by each record's fixed size. Stop at 0xFF or corruption.
-    uint32_t offset = 0;
-    uint32_t lastGoodOffset = 0;
-    uint8_t probe;
+    uint32_t pageBase = 0U;
 
-    while (offset < partSize) {
-        int ret = flash_area_read(flashArea, offset, &probe, 1);
+    while (pageBase < partSize) {
+        uint8_t firstByte = 0xFF;
+        const int ret = flash_area_read(flashArea, pageBase, &firstByte, 1);
         if (ret != 0) {
-            LOG_ERR("Flash read error at offset 0x%08X: %d", offset, ret);
+            LOG_ERR("Flash read error at offset 0x%08X: %d", pageBase, ret);
             return ret;
         }
 
-        // Erased so this is our write pointer
-        if (probe == 0xFF) {
+        if (firstByte == 0xFF) {
             break;
         }
 
-        // Not magic, not erased so corruption or torn write
-        if (probe != FlightLog::RECORD_MAGIC) {
-            LOG_WRN("Corruption at 0x%08X (0x%02X), rewinding to 0x%08X", offset, probe, lastGoodOffset);
-            offset = lastGoodOffset;
+        uint32_t consumedBytes = 0U;
+        if (!scanPageForRecords(flashArea, pageBase, partSize, consumedBytes)) {
             break;
         }
 
-        // Read type byte to determine record size
-        uint8_t typeByte;
-        ret = flash_area_read(flashArea, offset + 1, &typeByte, 1);
-        if (ret != 0) {
-            LOG_ERR("Flash read error at offset 0x%08X: %d", offset + 1, ret);
-            return ret;
-        }
-
-        const size_t recSize = FlightLog::recordSizeFromRaw(typeByte);
-        if (recSize == 0) {
-            LOG_WRN("Unknown type 0x%02X at 0x%08X, rewinding to 0x%08X", typeByte, offset, lastGoodOffset);
-            offset = lastGoodOffset;
-            break;
-        }
-
-        if (offset + recSize > partSize) {
-            LOG_WRN("Record at 0x%08X overflows partition, rewinding to 0x%08X", offset, lastGoodOffset);
-            offset = lastGoodOffset;
-            break;
-        }
-
-        lastGoodOffset = offset;
-        offset += recSize;
+        pageBase += PAGE_SIZE;
     }
 
-    writePtr = offset;
+    writePtr = pageBase;
     return 0;
 }
