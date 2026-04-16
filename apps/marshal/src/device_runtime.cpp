@@ -18,6 +18,7 @@
 #include <marshal/device_runtime.h>
 #include <marshal/usb_support.h>
 #include <zephyr/device.h>
+#include <zephyr/drivers/hwinfo.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -59,6 +60,13 @@ static bool apogeeSeen = false;
 static uint32_t apogeeTimeMs = 0U;
 static bool drogueDeployIssued = false;
 static bool mainDeployIssued = false;
+static constexpr uint16_t kBatteryPresentMarginMv = 150U;
+static constexpr uint32_t kResetCauseReportDelayMs = 2000U;
+#if defined(CONFIG_HWINFO)
+static uint32_t pendingResetCause = 0U;
+static bool pendingResetCauseValid = false;
+static k_work_delayable resetCauseReportWork;
+#endif
 
 #define BARO_STACK_SIZE 1024
 #define BARO_PRIORITY   4
@@ -251,27 +259,129 @@ static void voltageThreadEntry(void*, void*, void*) {
     }
 }
 
-static bool checkBatteryVoltage() {
-    voltageMonitor.sample();
-    const uint16_t vbat = static_cast<uint16_t>(voltageMonitor.vbatMv());
-    const uint16_t threshold = FlightComputerSettings::minBatteryMv();
-
-    if (vbat < threshold) {
-        LOG_ERR("Battery voltage %u mV below lockout threshold %u mV - NOT ARMING", vbat, threshold);
-        return false;
+static int sampleVoltages(uint16_t& vbatMv, uint16_t& vccMv) {
+    const int ret = voltageMonitor.sample();
+    if (ret != 0) {
+        LOG_ERR("Voltage sample failed: %d", ret);
+        return ret;
     }
 
-    LOG_INF("Battery voltage OK: %u mV (threshold %u mV)", vbat, threshold);
-    return true;
+    vbatMv = static_cast<uint16_t>(voltageMonitor.vbatMv());
+    vccMv = static_cast<uint16_t>(voltageMonitor.vccMv());
+    return 0;
 }
+
+static int checkBatteryVoltage() {
+    uint16_t vbatMv = 0U;
+    uint16_t vccMv = 0U;
+    int ret = sampleVoltages(vbatMv, vccMv);
+    if (ret != 0) {
+        return ret;
+    }
+
+    const uint16_t threshold = FlightComputerSettings::minBatteryMv();
+    if (vbatMv < threshold) {
+        LOG_ERR("Battery voltage %u mV below lockout threshold %u mV - NOT ARMING", vbatMv, threshold);
+        return -EIO;
+    }
+
+    if (vbatMv <= static_cast<uint16_t>(vccMv + kBatteryPresentMarginMv)) {
+        LOG_ERR("Battery not present on pyro rail: VBAT=%u mV VCC=%u mV (need VBAT > VCC + %u mV)", vbatMv,
+                vccMv, kBatteryPresentMarginMv);
+        return -ENODEV;
+    }
+
+    LOG_INF("Battery voltage OK for pyro: VBAT=%u mV, VCC=%u mV (threshold %u mV)", vbatMv, vccMv, threshold);
+    return 0;
+}
+
+#if defined(CONFIG_HWINFO)
+static const char* resetCauseToString(uint32_t cause) {
+    switch (cause) {
+        case RESET_PIN:
+            return "pin";
+        case RESET_SOFTWARE:
+            return "software";
+        case RESET_BROWNOUT:
+            return "brownout";
+        case RESET_POR:
+            return "power-on reset";
+        case RESET_WATCHDOG:
+            return "watchdog";
+        case RESET_DEBUG:
+            return "debug";
+        case RESET_SECURITY:
+            return "security";
+        case RESET_LOW_POWER_WAKE:
+            return "low power wake-up";
+        case RESET_CPU_LOCKUP:
+            return "CPU lockup";
+        case RESET_PARITY:
+            return "parity error";
+        case RESET_PLL:
+            return "PLL error";
+        case RESET_CLOCK:
+            return "clock";
+        case RESET_HARDWARE:
+            return "hardware";
+        case RESET_USER:
+            return "user";
+        case RESET_TEMPERATURE:
+            return "temperature";
+        case RESET_BOOTLOADER:
+            return "bootloader";
+        case RESET_FLASH:
+            return "flash";
+        default:
+            return "unknown";
+    }
+}
+
+static void reportResetCause(struct k_work* work) {
+    ARG_UNUSED(work);
+
+    if (!pendingResetCauseValid || pendingResetCause == 0U) {
+        return;
+    }
+
+    LOG_WRN("Previous reset cause flags: 0x%08x", pendingResetCause);
+    for (uint32_t causeMask = 1U; causeMask != 0U; causeMask <<= 1U) {
+        if ((pendingResetCause & causeMask) != 0U) {
+            LOG_WRN("Previous reset cause: %s", resetCauseToString(causeMask));
+        }
+    }
+}
+
+static void captureResetCause() {
+    uint32_t cause = 0U;
+    const int ret = hwinfo_get_reset_cause(&cause);
+    if (ret == -ENOSYS) {
+        return;
+    }
+
+    if (ret != 0) {
+        LOG_ERR("Failed to read reset cause: %d", ret);
+        return;
+    }
+
+    pendingResetCause = cause;
+    pendingResetCauseValid = true;
+
+    const int clearRet = hwinfo_clear_reset_cause();
+    if (clearRet != 0 && clearRet != -ENOSYS) {
+        LOG_ERR("Failed to clear reset cause: %d", clearRet);
+    }
+}
+#endif
 
 static int ensurePyrosArmed() {
     if (armed) {
         return 0;
     }
 
-    if (!checkBatteryVoltage()) {
-        return -EIO;
+    const int batteryRet = checkBatteryVoltage();
+    if (batteryRet != 0) {
+        return batteryRet;
     }
 
     int ret = droguePyro.arm();
@@ -358,7 +468,14 @@ static int cmdTestDeploy(const struct shell* sh, size_t argc, char** argv) {
         return ret;
     }
 
-    shell_print(sh, "Firing drogue pyro");
+    uint16_t vbatMv = 0U;
+    uint16_t vccMv = 0U;
+    ret = sampleVoltages(vbatMv, vccMv);
+    if (ret == 0) {
+        shell_print(sh, "Pre-fire voltages: VBAT=%u mV VCC=%u mV", vbatMv, vccMv);
+    }
+
+    shell_print(sh, "Firing drogue pyro for %u ms", kPyroFireDurationMs);
     ret = droguePyro.fire(kPyroFireDurationMs);
     if (ret != 0) {
         logPyroAction(1, FlightLog::PyroAction::FAULT);
@@ -369,7 +486,7 @@ static int cmdTestDeploy(const struct shell* sh, size_t argc, char** argv) {
 
     k_sleep(K_MSEC(100));
 
-    shell_print(sh, "Firing main pyro");
+    shell_print(sh, "Firing main pyro for %u ms", kPyroFireDurationMs);
     ret = mainPyro.fire(kPyroFireDurationMs);
     if (ret != 0) {
         logPyroAction(2, FlightLog::PyroAction::FAULT);
@@ -402,6 +519,11 @@ int initRuntime() {
     }
 
 #if !defined(CONFIG_BOARD_NATIVE_SIM)
+#if defined(CONFIG_HWINFO)
+    k_work_init_delayable(&resetCauseReportWork, reportResetCause);
+    captureResetCause();
+#endif
+
     static const flash_area* rawFa = nullptr;
     static const flash_area* fatFa = nullptr;
     ret = flash_area_open(PARTITION_ID(raw_partition), &rawFa);
@@ -439,6 +561,11 @@ int initRuntime() {
     if (ret != 0) {
         LOG_ERR("USB init failed: %d", ret);
     }
+#if defined(CONFIG_HWINFO)
+    if (pendingResetCauseValid && pendingResetCause != 0U) {
+        k_work_schedule(&resetCauseReportWork, K_MSEC(kResetCauseReportDelayMs));
+    }
+#endif
 
     ret = barometer.init();
     if (ret != 0) {
