@@ -67,6 +67,31 @@ run-hunter-sim:
 sim-stream input format="openrocket":
     python tools/sim_stream.py {{input}} --format {{format}}
 
+# Build all firmware targets
+all: outlaw outlaw-433 outlaw-evo outlaw-evo-433 hunter hunter-433 marshal
+
+# Zip all built .bin files, renamed to <target>.bin, into firmware.zip
+zip:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="firmware.zip"
+    staging="$(mktemp -d)"
+    trap 'rm -rf "$staging"' EXIT
+    shopt -s nullglob
+    count=0
+    for bin in builds/*/zephyr/zephyr.bin; do
+        target="$(basename "$(dirname "$(dirname "$bin")")")"
+        cp "$bin" "$staging/$target.bin"
+        count=$((count + 1))
+    done
+    if [ "$count" -eq 0 ]; then
+        echo "No .bin files found under builds/*/zephyr/" >&2
+        exit 1
+    fi
+    rm -f "$out"
+    (cd "$staging" && zip -j "$OLDPWD/$out" *.bin)
+    echo "Packaged $count binaries into $out"
+
 # Flash with ST-Link
 # Usage: just sflash outlaw | just sflash hunter
 sflash target:
