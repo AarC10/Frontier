@@ -23,6 +23,7 @@ public:
 	};
 
 	static constexpr size_t MAX_FLIGHTS = 16;
+	static constexpr uint32_t DEFAULT_CHUNK_SIZE_BYTES = 3U * 1024U * 1024U;
 
 	FlightExporter(const flash_area *rawPartition, const flash_area *fatPartition);
 
@@ -34,6 +35,8 @@ public:
 	int scanFlights();
 
 	int exportFlight(uint32_t flightId);
+
+	int exportFlightChunk(uint32_t flightId, uint32_t chunkIndex);
 
 	int exportAll();
 
@@ -52,6 +55,10 @@ public:
 	static bool fileExists(const char *path);
 
 	static void buildFilename(char *buf, size_t bufLen, uint32_t flightId);
+	static void buildChunkFilename(char *buf, size_t bufLen, uint32_t flightId, uint32_t chunkIndex);
+
+	uint32_t maxSingleFileExportSize() const;
+	uint32_t recommendedChunkSize() const;
 
 private:
 	const flash_area *rawFa;
@@ -65,7 +72,10 @@ private:
 
 	int formatAndMount();
 
+	int copyRangeToFile(uint32_t offset, uint32_t size, const char *filename);
 	int copyFlightToFile(const FlightInfo &flight, const char *filename);
 };
 
 void flightExporterShellRegister(FlightExporter *exporter);
+
+void flightLoggerShellRegister(FlightLogger *logger);
