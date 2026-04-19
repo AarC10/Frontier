@@ -258,7 +258,7 @@ static void voltageThreadEntry(void*, void*, void*) {
             flightLogger->logVoltage(vbatMv, vccMv, 0, 0);
         }
 
-        LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", vbatMv, vccMv);
+        // LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", vbatMv, vccMv);
 
         k_sleep(K_MSEC(1000));
     }
