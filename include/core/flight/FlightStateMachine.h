@@ -35,8 +35,9 @@ class FlightStateMachine {
 
     static constexpr float coastApogeeAccelGs = 1.0f;
     static constexpr uint32_t apogeeInhibitAfterBoostMs = 1000U;
-    static constexpr float apogeeDescentDeltaM = 1.0f;
-    static constexpr uint8_t apogeeDescendingSamplesRequired = 3U;
+    static constexpr float apogeeBaroFilterAlpha = 0.1f;
+    static constexpr float apogeeDescentDeltaM = 0.75f;
+    static constexpr uint8_t apogeeDescendingSamplesRequired = 2U;
 
     static constexpr float descentLandedRestAccelGs = 1.0f;
     static constexpr float descentLandedAccelToleranceGs = 0.2f;
@@ -69,6 +70,8 @@ class FlightStateMachine {
 
     float lastPressureKPa{0.0f};
     bool haveLastPressure{false};
+    float filteredPressureKPa{0.0f};
+    bool haveFilteredPressure{false};
 
     static float accelMagnitudeG(const ImuSample &sample);
     static float pressureKPaToAltitudeM(float pressureKPa);

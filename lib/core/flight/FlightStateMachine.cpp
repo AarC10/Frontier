@@ -19,7 +19,14 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
     const float accelG = accelMagnitudeG(imuSample);
     const float currentPressureKPa = pressureKPa(baroSample);
     const float currentAltitudeM = pressureKPaToAltitudeM(currentPressureKPa);
-    const bool pressureIncreasing = haveLastPressure && (currentPressureKPa > lastPressureKPa);
+    if (!haveFilteredPressure) {
+        filteredPressureKPa = currentPressureKPa;
+        haveFilteredPressure = true;
+    } else {
+        filteredPressureKPa += (currentPressureKPa - filteredPressureKPa) * apogeeBaroFilterAlpha;
+    }
+    const float filteredAltitudeM = pressureKPaToAltitudeM(filteredPressureKPa);
+    const bool pressureIncreasing = haveLastPressure && (filteredPressureKPa > lastPressureKPa);
 
     if (!havePadAltitude) {
         padAltitudeM = currentAltitudeM;
@@ -42,7 +49,7 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
                     transitionTo(FlightState::BOOST, now);
                     boostEntryTimeMs = now;
                     above2gActive = false;
-                    maxAltitudeM = currentAltitudeM;
+                    maxAltitudeM = filteredAltitudeM;
                     descendingSampleCount = 0U;
                 }
             } else {
@@ -52,8 +59,8 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
             break;
 
         case FlightState::BOOST:
-            if (currentAltitudeM > maxAltitudeM) {
-                maxAltitudeM = currentAltitudeM;
+            if (filteredAltitudeM > maxAltitudeM) {
+                maxAltitudeM = filteredAltitudeM;
             }
             if (accelG < boostCoastAccelGs) {
                 transitionTo(FlightState::COAST, now);
@@ -63,10 +70,10 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
         case FlightState::COAST: {
             const bool inhibitApogee = elapsedMs(now, boostEntryTimeMs) < apogeeInhibitAfterBoostMs;
             const bool accelCondition = accelG < coastApogeeAccelGs;
-            if (currentAltitudeM > maxAltitudeM) {
-                maxAltitudeM = currentAltitudeM;
+            if (filteredAltitudeM > maxAltitudeM) {
+                maxAltitudeM = filteredAltitudeM;
                 descendingSampleCount = 0U;
-            } else if ((maxAltitudeM - currentAltitudeM) >= apogeeDescentDeltaM && pressureIncreasing) {
+            } else if ((maxAltitudeM - filteredAltitudeM) >= apogeeDescentDeltaM && pressureIncreasing) {
                 if (descendingSampleCount < apogeeDescendingSamplesRequired) {
                     ++descendingSampleCount;
                 }
@@ -122,7 +129,7 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
             break;
     }
 
-    lastPressureKPa = currentPressureKPa;
+    lastPressureKPa = filteredPressureKPa;
     haveLastPressure = true;
 
     return state;
