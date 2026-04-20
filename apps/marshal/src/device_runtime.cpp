@@ -16,6 +16,7 @@
 #include <core/settings/FlightComputerSettings.h>
 #include <cstdlib>
 #include <marshal/device_runtime.h>
+#include <marshal/sim_flight_replay.h>
 #include <marshal/usb_support.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/hwinfo.h>
@@ -28,6 +29,7 @@
 #endif
 
 #ifdef CONFIG_BOARD_NATIVE_SIM
+#include <posix_board_if.h>
 extern "C" void sim_pipe_reader_start(void);
 #endif
 
@@ -611,7 +613,11 @@ int initRuntime() {
     flightStateMachine = &fsm;
     flightStateMachine->onStateChange(handleStateChange);
 #else
-    LOG_INF("native_sim mode: sensor, logger, and USB paths are disabled");
+    if (sim::flightReplayRequested()) {
+        LOG_INF("native_sim mode: flight replay enabled");
+    } else {
+        LOG_INF("native_sim mode: waiting for socket-fed sim sensor data");
+    }
 #endif
 
     return 0;
@@ -625,7 +631,15 @@ void startRuntimeThreads() {
     k_thread_create(&voltageThread, voltageStack, VOLTAGE_STACK_SIZE, voltageThreadEntry, nullptr, nullptr, nullptr,
                     VOLTAGE_PRIORITY, 0, K_NO_WAIT);
 #else
-    sim_pipe_reader_start();
+    if (sim::flightReplayRequested()) {
+        const int ret = sim::startFlightReplay();
+        if (ret != 0) {
+            LOG_ERR("Failed to start native flight replay: %d", ret);
+            posix_exit(1);
+        }
+    } else {
+        sim_pipe_reader_start();
+    }
 #endif
 }
 

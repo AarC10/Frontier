@@ -11,7 +11,6 @@ LOG_MODULE_REGISTER(FlightStateMachine);
 FlightStateMachine::FlightStateMachine(Barometer &barometerRef, Imu &imuRef) : barometer(barometerRef), imu(imuRef) {
     const uint32_t now = k_uptime_get_32();
     stateEntryTimeMs = now;
-    descentAltitudeAnchorTimeMs = now;
 }
 
 FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSample &baroSample) {
@@ -92,13 +91,17 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
         case FlightState::APOGEE:
             transitionTo(FlightState::DESCENT, now);
             below01gActive = false;
-            descentAltitudeAnchorTimeMs = now;
-            descentAltitudeAnchorM = currentAltitudeM;
+            resetDescentAltitudeHistory();
             break;
 
         case FlightState::DESCENT: {
             const bool nearRestAccel =
                 std::fabs(accelG - descentLandedRestAccelGs) <= descentLandedAccelToleranceGs;
+            float filteredAltitudeAglM = filteredAltitudeM - padAltitudeM;
+            if (filteredAltitudeAglM < 0.0f) {
+                filteredAltitudeAglM = 0.0f;
+            }
+            appendDescentAltitudeSample(now, filteredAltitudeAglM);
 
             if (nearRestAccel) {
                 if (!below01gActive) {
@@ -109,15 +112,9 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
                 below01gActive = false;
             }
 
-            if (elapsedMs(now, descentAltitudeAnchorTimeMs) >= descentLandedAltitudeWindowMs) {
-                descentAltitudeAnchorTimeMs = now;
-                descentAltitudeAnchorM = currentAltitudeM;
-            }
-
-            const float altitudeDeltaM = std::fabs(currentAltitudeM - descentAltitudeAnchorM);
             const bool accelStable = below01gActive && (elapsedMs(now, below01gStartMs) >= descentLandedAccelSustainMs);
-            const bool altitudeStable = elapsedMs(now, descentAltitudeAnchorTimeMs) >= descentLandedAltitudeWindowMs &&
-                                        altitudeDeltaM < descentLandedAltitudeDeltaM;
+            const bool altitudeStable =
+                descentAltitudeWindowFull(now) && (descentAltitudeRangeM() < descentLandedAltitudeDeltaM);
 
             if (accelStable && altitudeStable) {
                 transitionTo(FlightState::LANDED, now);
@@ -161,6 +158,60 @@ float FlightStateMachine::pressureKPa(const BaroSample &sample) {
 }
 
 uint32_t FlightStateMachine::elapsedMs(uint32_t now, uint32_t then) { return now - then; }
+
+void FlightStateMachine::resetDescentAltitudeHistory() {
+    descentAltitudeHistoryHead = 0U;
+    descentAltitudeHistoryCount = 0U;
+}
+
+void FlightStateMachine::appendDescentAltitudeSample(uint32_t nowMs, float altitudeM) {
+    while (descentAltitudeHistoryCount > 0U &&
+           elapsedMs(nowMs, descentAltitudeHistoryTimesMs[descentAltitudeHistoryHead]) > descentLandedAltitudeWindowMs) {
+        descentAltitudeHistoryHead = (descentAltitudeHistoryHead + 1U) % descentLandedAltitudeHistoryCapacity;
+        --descentAltitudeHistoryCount;
+    }
+
+    if (descentAltitudeHistoryCount == descentLandedAltitudeHistoryCapacity) {
+        descentAltitudeHistoryHead = (descentAltitudeHistoryHead + 1U) % descentLandedAltitudeHistoryCapacity;
+        --descentAltitudeHistoryCount;
+    }
+
+    const size_t tail =
+        (descentAltitudeHistoryHead + descentAltitudeHistoryCount) % descentLandedAltitudeHistoryCapacity;
+    descentAltitudeHistoryTimesMs[tail] = nowMs;
+    descentAltitudeHistoryM[tail] = altitudeM;
+    ++descentAltitudeHistoryCount;
+}
+
+bool FlightStateMachine::descentAltitudeWindowFull(uint32_t nowMs) const {
+    if (descentAltitudeHistoryCount == 0U) {
+        return false;
+    }
+
+    return elapsedMs(nowMs, descentAltitudeHistoryTimesMs[descentAltitudeHistoryHead]) >= descentLandedAltitudeWindowMs;
+}
+
+float FlightStateMachine::descentAltitudeRangeM() const {
+    if (descentAltitudeHistoryCount == 0U) {
+        return 0.0f;
+    }
+
+    float minAltitudeM = descentAltitudeHistoryM[descentAltitudeHistoryHead];
+    float maxAltitudeM = minAltitudeM;
+
+    for (size_t index = 1U; index < descentAltitudeHistoryCount; ++index) {
+        const size_t sampleIndex = (descentAltitudeHistoryHead + index) % descentLandedAltitudeHistoryCapacity;
+        const float altitudeM = descentAltitudeHistoryM[sampleIndex];
+        if (altitudeM < minAltitudeM) {
+            minAltitudeM = altitudeM;
+        }
+        if (altitudeM > maxAltitudeM) {
+            maxAltitudeM = altitudeM;
+        }
+    }
+
+    return maxAltitudeM - minAltitudeM;
+}
 
 void FlightStateMachine::transitionTo(FlightState next, uint32_t nowMs) {
     if (state != next) {
