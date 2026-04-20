@@ -202,8 +202,10 @@
 		reg = <1>;
 		spi-max-frequency = <DT_FREQ_M(10)>;
 
+		accel-range = <LSM6DSV16X_DT_FS_16G>;
 		accel-odr = <LSM6DSVXXX_DT_ODR_AT_240Hz>;
-    	gyro-odr = <LSM6DSVXXX_DT_ODR_AT_240Hz>;
+		gyro-range = <LSM6DSV16X_DT_FS_4000DPS>;
+		gyro-odr = <LSM6DSVXXX_DT_ODR_AT_240Hz>;
 
 		drdy-pin = <1>;
 		drdy-pulsed;
