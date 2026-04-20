@@ -10,6 +10,8 @@
 #ifdef CONFIG_BOARD_NATIVE_SIM
 
 #include <core/flight/FlightStateMachine.h>
+#include <core/flight_logger/FlightExporter.h>
+#include <core/flight_logger/FlightLogger.h>
 #include <core/flight_logger/FlightLogRecords.h>
 #include <core/sim/sim_sensor_state.h>
 #include <core/sensors/Barometer.h>
@@ -21,6 +23,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log_ctrl.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/storage/flash_map.h>
 
 #include <cmath>
 #include <cstdint>
@@ -349,16 +352,120 @@ static bool loadReplayFlight(const char* path, ReplayFlight& flight) {
     return true;
 }
 
+static std::string buildReplayExportPath(const char* replayPath) {
+    std::string outputPath = replayPath;
+    const size_t slashPos = outputPath.find_last_of("/\\");
+    const size_t extPos = outputPath.find_last_of('.');
+    if (extPos != std::string::npos && (slashPos == std::string::npos || extPos > slashPos)) {
+        outputPath.erase(extPos);
+    }
+
+    outputPath += "_REPLAY.BIN";
+    return outputPath;
+}
+
+static int exportReplayFlightToHost(const flash_area* rawFa, uint32_t flightId, const char* replayPath) {
+    if (rawFa == nullptr || replayPath == nullptr) {
+        return -EINVAL;
+    }
+
+    FlightExporter exporter(rawFa, nullptr);
+    const int scanRet = exporter.scanFlights();
+    if (scanRet < 0) {
+        LOG_ERR("Failed to scan replay flight for export: %d", scanRet);
+        return scanRet;
+    }
+
+    const FlightExporter::FlightInfo* flightInfo = exporter.findFlight(flightId);
+    if (flightInfo == nullptr) {
+        LOG_ERR("Replay flight %u not found for export", flightId);
+        return -ENOENT;
+    }
+
+    const std::string outputPath = buildReplayExportPath(replayPath);
+    std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+    if (!output.is_open()) {
+        LOG_ERR("Failed to open replay export path %s", outputPath.c_str());
+        return -EIO;
+    }
+
+    constexpr size_t kExportChunkSize = 512U;
+    uint8_t buffer[kExportChunkSize];
+    uint32_t remaining = flightInfo->endOffset - flightInfo->startOffset;
+    uint32_t offset = flightInfo->startOffset;
+
+    while (remaining > 0U) {
+        const size_t chunkSize = std::min<size_t>(remaining, sizeof(buffer));
+        const int readRet = flash_area_read(rawFa, offset, buffer, chunkSize);
+        if (readRet != 0) {
+            LOG_ERR("Failed reading replay export chunk at 0x%08X: %d", offset, readRet);
+            return readRet;
+        }
+
+        output.write(reinterpret_cast<const char*>(buffer), static_cast<std::streamsize>(chunkSize));
+        if (!output.good()) {
+            LOG_ERR("Failed writing replay export to %s", outputPath.c_str());
+            return -EIO;
+        }
+
+        offset += static_cast<uint32_t>(chunkSize);
+        remaining -= static_cast<uint32_t>(chunkSize);
+    }
+
+    output.close();
+    if (!output) {
+        LOG_ERR("Failed to finalize replay export %s", outputPath.c_str());
+        return -EIO;
+    }
+
+    LOG_INF("Replay flight exported to %s", outputPath.c_str());
+    return 0;
+}
+
 static void replayThreadEntry(void*, void*, void*) {
     Barometer dummyBarometer(nullptr);
     Imu dummyImu(nullptr);
     FlightStateMachine stateMachine(dummyBarometer, dummyImu);
+    const flash_area* rawFa = nullptr;
     uint32_t replayTimeMs = 0U;
     bool landedDetected = false;
 
-    stateMachine.onStateChange([&replayTimeMs, &landedDetected](FlightState oldState, FlightState newState) {
+    int ret = flash_area_open(PARTITION_ID(raw_partition), &rawFa);
+    if (ret != 0) {
+        LOG_ERR("Failed to open raw partition for replay logging: %d", ret);
+        LOG_PANIC();
+        posix_exit(1);
+    }
+
+    FlightLogger flightLogger(rawFa);
+    ret = flightLogger.init();
+    if (ret != 0) {
+        LOG_ERR("Failed to init replay flight logger: %d", ret);
+        flash_area_close(rawFa);
+        LOG_PANIC();
+        posix_exit(1);
+    }
+
+    ret = flightLogger.eraseAll();
+    if (ret != 0) {
+        LOG_ERR("Failed to erase replay log partition: %d", ret);
+        flash_area_close(rawFa);
+        LOG_PANIC();
+        posix_exit(1);
+    }
+
+    ret = flightLogger.startFlight(replayFlight.flightId, replayFlight.imuRateHz, replayFlight.baroRateHz);
+    if (ret != 0) {
+        LOG_ERR("Failed to start replay flight log: %d", ret);
+        flash_area_close(rawFa);
+        LOG_PANIC();
+        posix_exit(1);
+    }
+
+    stateMachine.onStateChange([&flightLogger, &replayTimeMs, &landedDetected](FlightState oldState, FlightState newState) {
         LOG_INF("Replay detected %s -> %s at %u ms", flightStateName(oldState), flightStateName(newState),
                 replayTimeMs);
+        flightLogger.logStateChange(std::to_underlying(oldState), std::to_underlying(newState));
         if (newState == FlightState::LANDED) {
             landedDetected = true;
         }
@@ -384,6 +491,8 @@ static void replayThreadEntry(void*, void*, void*) {
 
         replayTimeMs = sample.flightTimeMs;
         publishReplaySample(sample);
+        flightLogger.logImu(sample.imu);
+        flightLogger.logBaro(sample.baro);
         (void) stateMachine.update(sample.imu, sample.baro);
         if (landedDetected) {
             break;
@@ -392,6 +501,13 @@ static void replayThreadEntry(void*, void*, void*) {
         previousFlightTimeMs = sample.flightTimeMs;
         firstSample = false;
     }
+
+    flightLogger.endFlight();
+    ret = exportReplayFlightToHost(rawFa, replayFlight.flightId, replayBinPath);
+    if (ret != 0) {
+        LOG_ERR("Replay export failed: %d", ret);
+    }
+    flash_area_close(rawFa);
 
     LOG_INF("Replay finished at %u ms with final state %s", replayTimeMs, flightStateName(stateMachine.currentState()));
     LOG_PANIC();
