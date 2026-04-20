@@ -25,6 +25,19 @@ static const char *const FAT_MOUNT = "/marshal:";
 namespace {
 
 constexpr uint32_t kFlightLogPageSize = 256U;
+constexpr uint32_t kFilesystemReserveBytes = 128U * 1024U;
+
+uint32_t flightSizeBytes(const FlightExporter::FlightInfo &flight) {
+	return flight.endOffset - flight.startOffset;
+}
+
+uint32_t chunkCountForSize(uint32_t totalSize, uint32_t chunkSize) {
+	if (chunkSize == 0U) {
+		return 0U;
+	}
+
+	return (totalSize + chunkSize - 1U) / chunkSize;
+}
 
 bool scanPageForRecords(const flash_area *flashArea, uint32_t pageBase, uint32_t partSize, uint32_t &consumedBytes) {
 	consumedBytes = 0U;
@@ -250,7 +263,13 @@ const FlightExporter::FlightInfo *FlightExporter::findFlight(uint32_t flightId) 
 }
 
 void FlightExporter::buildFilename(char *buf, size_t bufLen, uint32_t flightId) {
-	snprintf(buf, bufLen, "%s/FLIGHT_%03u.BIN", FAT_MOUNT, flightId);
+	// FAT 8.3 limit: 8 base + 3 ext. "FLT_NNN" = 7 chars, fits cleanly.
+	snprintf(buf, bufLen, "%s/FLT_%03u.BIN", FAT_MOUNT, flightId);
+}
+
+void FlightExporter::buildChunkFilename(char *buf, size_t bufLen, uint32_t flightId, uint32_t chunkIndex) {
+	// FAT 8.3 limit: "FNNN_NN" = 7 chars before the extension.
+	snprintf(buf, bufLen, "%s/F%03u_%02u.BIN", FAT_MOUNT, flightId, chunkIndex);
 }
 
 bool FlightExporter::fileExists(const char *path) {
@@ -258,9 +277,27 @@ bool FlightExporter::fileExists(const char *path) {
 	return fs_stat(path, &entry) == 0;
 }
 
-int FlightExporter::copyFlightToFile(const FlightInfo &flight,
-				     const char *filename) {
-	const uint32_t size = flight.endOffset - flight.startOffset;
+uint32_t FlightExporter::maxSingleFileExportSize() const {
+	if (fatFa == nullptr || fatFa->fa_size <= kFilesystemReserveBytes) {
+		return 0U;
+	}
+
+	return fatFa->fa_size - kFilesystemReserveBytes;
+}
+
+uint32_t FlightExporter::recommendedChunkSize() const {
+	const uint32_t maxExportSize = maxSingleFileExportSize();
+	if (maxExportSize == 0U) {
+		return 0U;
+	}
+
+	return (DEFAULT_CHUNK_SIZE_BYTES < maxExportSize) ? DEFAULT_CHUNK_SIZE_BYTES : maxExportSize;
+}
+
+int FlightExporter::copyRangeToFile(uint32_t offset, uint32_t size, const char *filename) {
+	if (size == 0U) {
+		return -EINVAL;
+	}
 
 	struct fs_file_t file;
 	fs_file_t_init(&file);
@@ -273,15 +310,15 @@ int FlightExporter::copyFlightToFile(const FlightInfo &flight,
 
 	uint8_t buf[COPY_BUF_SIZE];
 	uint32_t remaining = size;
-	uint32_t offset = flight.startOffset;
+	uint32_t cursor = offset;
 
 	while (remaining > 0) {
 		const size_t chunk = (remaining > COPY_BUF_SIZE)
 			? COPY_BUF_SIZE : remaining;
 
-		ret = flash_area_read(rawFa, offset, buf, chunk);
+		ret = flash_area_read(rawFa, cursor, buf, chunk);
 		if (ret != 0) {
-			LOG_ERR("Flash read failed at 0x%08X: %d", offset, ret);
+			LOG_ERR("Flash read failed at 0x%08X: %d", cursor, ret);
 			fs_close(&file);
 			return ret;
 		}
@@ -293,11 +330,22 @@ int FlightExporter::copyFlightToFile(const FlightInfo &flight,
 			return static_cast<int>(written);
 		}
 
-		offset += chunk;
+		cursor += chunk;
 		remaining -= chunk;
 	}
 
 	fs_close(&file);
+	return 0;
+}
+
+int FlightExporter::copyFlightToFile(const FlightInfo &flight,
+				     const char *filename) {
+	const uint32_t size = flightSizeBytes(flight);
+	const int ret = copyRangeToFile(flight.startOffset, size, filename);
+	if (ret != 0) {
+		return ret;
+	}
+
 	LOG_INF("Exported flight %u: %u bytes -> %s",
 		flight.flightId, size, filename);
 	return 0;
@@ -315,6 +363,14 @@ int FlightExporter::exportFlight(uint32_t flightId) {
 		return -ENOENT;
 	}
 
+	const uint32_t size = flightSizeBytes(*info);
+	const uint32_t maxExportSize = maxSingleFileExportSize();
+	if (size > maxExportSize) {
+		LOG_WRN("Flight %u (%u bytes) exceeds single-file export limit (%u bytes)",
+			flightId, size, maxExportSize);
+		return -EFBIG;
+	}
+
 	char filename[32];
 	buildFilename(filename, sizeof(filename), flightId);
 
@@ -324,6 +380,56 @@ int FlightExporter::exportFlight(uint32_t flightId) {
 	}
 
 	return copyFlightToFile(*info, filename);
+}
+
+int FlightExporter::exportFlightChunk(uint32_t flightId, uint32_t chunkIndex) {
+	if (!mounted) {
+		LOG_ERR("FAT not mounted");
+		return -ENODEV;
+	}
+
+	if (chunkIndex == 0U) {
+		return -EINVAL;
+	}
+
+	const FlightInfo *info = findFlight(flightId);
+	if (info == nullptr) {
+		LOG_ERR("Flight %u not found", flightId);
+		return -ENOENT;
+	}
+
+	const uint32_t chunkSize = recommendedChunkSize();
+	if (chunkSize == 0U) {
+		return -ENOSPC;
+	}
+
+	const uint32_t size = flightSizeBytes(*info);
+	const uint32_t chunkCount = chunkCountForSize(size, chunkSize);
+	if (chunkIndex > chunkCount) {
+		return -ERANGE;
+	}
+
+	const uint32_t chunkOffset = (chunkIndex - 1U) * chunkSize;
+	const uint32_t remaining = size - chunkOffset;
+	const uint32_t bytesToWrite = (remaining > chunkSize) ? chunkSize : remaining;
+
+	char filename[32];
+	buildChunkFilename(filename, sizeof(filename), flightId, chunkIndex);
+
+	if (fileExists(filename)) {
+		LOG_INF("Flight %u chunk %u already exported (%s), skipping",
+			flightId, chunkIndex, filename);
+		return -EEXIST;
+	}
+
+	const int ret = copyRangeToFile(info->startOffset + chunkOffset, bytesToWrite, filename);
+	if (ret != 0) {
+		return ret;
+	}
+
+	LOG_INF("Exported flight %u chunk %u/%u: %u bytes -> %s",
+		flightId, chunkIndex, chunkCount, bytesToWrite, filename);
+	return 0;
 }
 
 int FlightExporter::exportAll() {
@@ -339,6 +445,13 @@ int FlightExporter::exportAll() {
 
 	int exported = 0;
 	for (size_t i = 0; i < numFlights; i++) {
+		const uint32_t size = flightSizeBytes(flightList[i]);
+		if (size > maxSingleFileExportSize()) {
+			LOG_WRN("Skipping flight %u: %u bytes exceeds single-file export limit",
+				flightList[i].flightId, size);
+			continue;
+		}
+
 		char filename[32];
 		buildFilename(filename, sizeof(filename), flightList[i].flightId);
 
@@ -424,9 +537,14 @@ int FlightExporter::clearExports() {
 #ifdef CONFIG_SHELL
 
 static FlightExporter *shellExporter = nullptr;
+static FlightLogger *shellLogger = nullptr;
 
 void flightExporterShellRegister(FlightExporter *exporter) {
 	shellExporter = exporter;
+}
+
+void flightLoggerShellRegister(FlightLogger *logger) {
+	shellLogger = logger;
 }
 
 static int cmdList(const struct shell *sh, size_t argc, char **argv) {
@@ -470,6 +588,51 @@ static int cmdList(const struct shell *sh, size_t argc, char **argv) {
 	return 0;
 }
 
+static int cmdParts(const struct shell *sh, size_t argc, char **argv) {
+	ARG_UNUSED(argc);
+
+	if (shellExporter == nullptr) {
+		shell_error(sh, "Exporter not initialized");
+		return -EINVAL;
+	}
+
+	int ret = shellExporter->scanFlights();
+	if (ret < 0) {
+		shell_error(sh, "Scan failed: %d", ret);
+		return ret;
+	}
+
+	char *end;
+	const unsigned long id = strtoul(argv[1], &end, 10);
+	if (*end != '\0') {
+		shell_error(sh, "Invalid flight ID '%s'", argv[1]);
+		return -EINVAL;
+	}
+
+	const FlightExporter::FlightInfo *flight = shellExporter->findFlight(static_cast<uint32_t>(id));
+	if (flight == nullptr) {
+		shell_error(sh, "Flight %lu not found", id);
+		return -ENOENT;
+	}
+
+	const uint32_t size = flightSizeBytes(*flight);
+	const uint32_t singleFileLimit = shellExporter->maxSingleFileExportSize();
+	const uint32_t chunkSize = shellExporter->recommendedChunkSize();
+	const uint32_t chunkCount = chunkCountForSize(size, chunkSize);
+
+	shell_print(sh, "Flight %lu size: %u bytes", id, size);
+	shell_print(sh, "Single-file export limit: %u bytes", singleFileLimit);
+	if (size <= singleFileLimit) {
+		shell_print(sh, "Fits as a single file: FLT_%03lu.BIN", id);
+		return 0;
+	}
+
+	shell_print(sh, "Requires %u chunk(s) of up to %u bytes", chunkCount, chunkSize);
+	shell_print(sh, "Use: flight export %lu <part>   where <part> is 1-%u", id, chunkCount);
+	shell_print(sh, "Copy each chunk off the USB drive before exporting the next one.");
+	return 0;
+}
+
 static int cmdExport(const struct shell *sh, size_t argc, char **argv) {
 	if (shellExporter == nullptr) {
 		shell_error(sh, "Exporter not initialized");
@@ -489,15 +652,61 @@ static int cmdExport(const struct shell *sh, size_t argc, char **argv) {
 		return -EINVAL;
 	}
 
-	shell_print(sh, "Exporting flight %lu", id);
-	ret = shellExporter->exportFlight(static_cast<uint32_t>(id));
+	const uint32_t flightId = static_cast<uint32_t>(id);
+	const bool exportChunk = (argc >= 3);
+	uint32_t chunkIndex = 0U;
+	if (exportChunk) {
+		const unsigned long part = strtoul(argv[2], &end, 10);
+		if (*end != '\0' || part == 0UL) {
+			shell_error(sh, "Invalid part index '%s'", argv[2]);
+			return -EINVAL;
+		}
+		chunkIndex = static_cast<uint32_t>(part);
+	}
+
+	if (exportChunk) {
+		shell_print(sh, "Exporting flight %lu chunk %u", id, chunkIndex);
+		ret = shellExporter->exportFlightChunk(flightId, chunkIndex);
+	} else {
+		shell_print(sh, "Exporting flight %lu", id);
+		ret = shellExporter->exportFlight(flightId);
+	}
 
 	if (ret == 0) {
-		shell_print(sh, "Done. FLIGHT_%03lu.BIN ready on USB drive.", id);
+		if (exportChunk) {
+			char filename[32];
+			FlightExporter::buildChunkFilename(filename, sizeof(filename), flightId, chunkIndex);
+			shell_print(sh, "Done. %s ready on USB drive.", filename + strlen(FAT_MOUNT) + 1);
+			shell_print(sh, "Copy it off the USB drive before exporting the next chunk.");
+		} else {
+			shell_print(sh, "Done. FLT_%03lu.BIN ready on USB drive.", id);
+		}
 	} else if (ret == -EEXIST) {
-		shell_print(sh, "Flight %lu already exported.", id);
+		if (exportChunk) {
+			shell_print(sh, "Flight %lu chunk %u already exported.", id, chunkIndex);
+		} else {
+			shell_print(sh, "Flight %lu already exported.", id);
+		}
+	} else if (ret == -ERANGE && exportChunk) {
+		const FlightExporter::FlightInfo *flight = shellExporter->findFlight(flightId);
+		const uint32_t chunkCount = (flight == nullptr)
+			? 0U
+			: chunkCountForSize(flightSizeBytes(*flight), shellExporter->recommendedChunkSize());
+		shell_error(sh, "Part index out of range. Valid parts: 1-%u", chunkCount);
+	} else if (ret == -EFBIG && !exportChunk) {
+		const FlightExporter::FlightInfo *flight = shellExporter->findFlight(flightId);
+		const uint32_t chunkCount = (flight == nullptr)
+			? 0U
+			: chunkCountForSize(flightSizeBytes(*flight), shellExporter->recommendedChunkSize());
+		shell_error(sh, "Flight %lu is too large for a single file on this partition.", id);
+		shell_print(sh, "Use: flight parts %lu", id);
+		shell_print(sh, "Or export a chunk directly with: flight export %lu <part>   (1-%u)", id, chunkCount);
 	} else {
-		shell_error(sh, "Export failed: %d", ret);
+		if (ret == -ENOSPC && exportChunk) {
+			shell_error(sh, "Export failed: FAT partition is full. Copy existing files off and run 'flight clear'.");
+		} else {
+			shell_error(sh, "Export failed: %d", ret);
+		}
 	}
 	return ret;
 }
@@ -565,16 +774,41 @@ static int cmdFormat(const struct shell *sh, size_t argc, char **argv) {
 	return ret;
 }
 
+static int cmdErase(const struct shell *sh, size_t argc, char **argv) {
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	if (shellLogger == nullptr) {
+		shell_error(sh, "Logger not initialized");
+		return -EINVAL;
+	}
+
+	shell_print(sh, "Erasing raw log partition...");
+	int ret = shellLogger->eraseAll();
+	if (ret == 0) {
+		shell_print(sh, "Raw partition erased.");
+	} else if (ret == -EBUSY) {
+		shell_error(sh, "Cannot erase while recording.");
+	} else {
+		shell_error(sh, "Erase failed: %d", ret);
+	}
+	return ret;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(subFlight,
 	SHELL_CMD(list, NULL, "List recorded flights", cmdList),
 	SHELL_CMD_ARG(export, NULL,
-		"Export a flight by ID (e.g. flight export 3)", cmdExport, 2, 0),
+		"Export a whole flight or a numbered chunk (e.g. flight export 3 or flight export 3 1)", cmdExport, 2, 1),
+	SHELL_CMD_ARG(parts, NULL,
+		"Show chunk info for an oversized flight (e.g. flight parts 3)", cmdParts, 2, 0),
 	SHELL_CMD(export_all, NULL,
 		"Export all flights (skips existing)", cmdExportAll),
 	SHELL_CMD(clear, NULL,
 		"Delete all exported .BIN files", cmdClear),
 	SHELL_CMD(format, NULL,
 		"Erase and reformat the FAT partition", cmdFormat),
+	SHELL_CMD(erase, NULL,
+		"Erase the raw log partition (destroys all recorded flights)", cmdErase),
 	SHELL_SUBCMD_SET_END
 );
 

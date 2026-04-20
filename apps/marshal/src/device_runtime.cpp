@@ -80,7 +80,7 @@ static k_thread voltageThread;
 
 static constexpr uint16_t kImuLoopRateHz = 100;
 static constexpr uint16_t kBaroLoopRateHz = 100;
-static constexpr uint32_t kPyroFireDurationMs = 50U;
+static constexpr uint32_t kPyroFireDurationMs = 25U;
 
 static float pressureKPaToAltitudeM(float pressureKPa) {
     return 44330.0f * (1.0f - std::pow(pressureKPa / 101.325f, 1.0f / 5.255f));
@@ -106,6 +106,12 @@ static void resetFlightActions() {
 static int ensurePyrosArmed();
 
 static void requestPyroDeploy(PyroController& controller, uint8_t channel, const char* reason) {
+    // Log FIRE intent before pulling the trigger. PYRO_EVENT force-flushes the page on
+    // pickup (FlightLogger writerLoop), and the brief sleep gives the writer thread a
+    // scheduling window to get the record onto flash before a brownout can eat it.
+    logPyroAction(channel, FlightLog::PyroAction::FIRE);
+    k_msleep(10);
+
     const int ret = controller.fire(kPyroFireDurationMs);
     if (ret != 0) {
         LOG_ERR("Pyro channel %u fire failed during %s: %d", channel, reason, ret);
@@ -114,7 +120,6 @@ static void requestPyroDeploy(PyroController& controller, uint8_t channel, const
     }
 
     LOG_WRN("Pyro channel %u fired for %u ms (%s)", channel, kPyroFireDurationMs, reason);
-    logPyroAction(channel, FlightLog::PyroAction::FIRE);
 }
 
 static void maybeRunDeployments() {
@@ -253,22 +258,29 @@ static void voltageThreadEntry(void*, void*, void*) {
             flightLogger->logVoltage(vbatMv, vccMv, 0, 0);
         }
 
-        LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", vbatMv, vccMv);
+        // LOG_INF("Voltage: VBAT=%u mV, VCC=%u mV", vbatMv, vccMv);
 
         k_sleep(K_MSEC(1000));
     }
 }
 
 static int sampleVoltages(uint16_t& vbatMv, uint16_t& vccMv) {
+    // Zephyr adc_stm32's set_channel_differential_mode early-return check is broken on
+    // STM32G4 (compares raw DIFSEL bit against CALFACT-domain constants), so every
+    // adc_channel_setup after init returns -EBUSY. The init-time sample populates
+    // VoltageMonitor's cached values; fall back to those on -EBUSY.
     const int ret = voltageMonitor.sample();
-    if (ret != 0) {
-        LOG_ERR("Voltage sample failed: %d", ret);
-        return ret;
-    }
-
     vbatMv = static_cast<uint16_t>(voltageMonitor.vbatMv());
     vccMv = static_cast<uint16_t>(voltageMonitor.vccMv());
-    return 0;
+    if (ret == 0) {
+        return 0;
+    }
+    if (ret == -EBUSY && vbatMv > 0) {
+        LOG_WRN("ADC busy, using cached VBAT=%u mV VCC=%u mV", vbatMv, vccMv);
+        return 0;
+    }
+    LOG_ERR("Voltage sample failed: %d", ret);
+    return ret;
 }
 
 static int checkBatteryVoltage() {
@@ -475,25 +487,27 @@ static int cmdTestDeploy(const struct shell* sh, size_t argc, char** argv) {
         shell_print(sh, "Pre-fire voltages: VBAT=%u mV VCC=%u mV", vbatMv, vccMv);
     }
 
-    shell_print(sh, "Firing drogue pyro for %u ms", kPyroFireDurationMs);
-    ret = droguePyro.fire(kPyroFireDurationMs);
+    // Start a flight recording so the pre-fire FIRE records actually hit flash
+    // and survive a brownout mid-pulse. Route both channels through requestPyroDeploy
+    // so the shell test exercises exactly the same path a real flight takes.
+    const uint32_t flightId = FlightComputerSettings::incrementFlightCounter();
+    ret = flightLogger->startFlight(flightId, kImuLoopRateHz, kBaroLoopRateHz);
     if (ret != 0) {
-        logPyroAction(1, FlightLog::PyroAction::FAULT);
-        shell_error(sh, "Drogue pyro fire failed: %d", ret);
+        shell_error(sh, "Failed to start logging for test: %d", ret);
         return ret;
     }
-    logPyroAction(1, FlightLog::PyroAction::FIRE);
+    shell_print(sh, "Recording test flight %u", flightId);
+
+    shell_print(sh, "Firing drogue pyro for %u ms", kPyroFireDurationMs);
+    requestPyroDeploy(droguePyro, 1, "test deploy drogue");
 
     k_sleep(K_MSEC(100));
 
     shell_print(sh, "Firing main pyro for %u ms", kPyroFireDurationMs);
-    ret = mainPyro.fire(kPyroFireDurationMs);
-    if (ret != 0) {
-        logPyroAction(2, FlightLog::PyroAction::FAULT);
-        shell_error(sh, "Main pyro fire failed: %d", ret);
-        return ret;
-    }
-    logPyroAction(2, FlightLog::PyroAction::FIRE);
+    requestPyroDeploy(mainPyro, 2, "test deploy main");
+
+    flightLogger->endFlight();
+    k_sleep(K_MSEC(100));
 
     shell_print(sh, "Pyro test complete");
     return 0;
@@ -546,6 +560,7 @@ int initRuntime() {
         if (ret != 0) {
             LOG_ERR("Flight logger init failed: %d", ret);
         }
+        flightLoggerShellRegister(flightLogger);
     }
 
     if (rawFa != nullptr && fatFa != nullptr) {

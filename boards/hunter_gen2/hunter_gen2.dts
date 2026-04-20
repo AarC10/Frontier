@@ -137,9 +137,9 @@
 	};
 };
 
-//&iwdg {
-//	status = "okay";
-//};
+&iwdg {
+	status = "okay";
+};
 
 //&rtc {
 //	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x10000000>,

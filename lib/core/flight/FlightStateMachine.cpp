@@ -146,7 +146,8 @@ float FlightStateMachine::pressureKPaToAltitudeM(float pressureKPa) {
 }
 
 float FlightStateMachine::pressureKPa(const BaroSample &sample) {
-    return sensor_value_to_float(&sample.pressure) / 1000.0f;
+    // MS56xx driver already reports SENSOR_CHAN_PRESS in kPa; no extra scaling.
+    return sensor_value_to_float(&sample.pressure);
 }
 
 uint32_t FlightStateMachine::elapsedMs(uint32_t now, uint32_t then) { return now - then; }
