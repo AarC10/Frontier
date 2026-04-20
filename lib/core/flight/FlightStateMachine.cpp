@@ -90,7 +90,10 @@ FlightState FlightStateMachine::update(const ImuSample &imuSample, const BaroSam
             break;
 
         case FlightState::DESCENT: {
-            if (accelG < descentLandedAccelGs) {
+            const bool nearRestAccel =
+                std::fabs(accelG - descentLandedRestAccelGs) <= descentLandedAccelToleranceGs;
+
+            if (nearRestAccel) {
                 if (!below01gActive) {
                     below01gActive = true;
                     below01gStartMs = now;

@@ -38,10 +38,11 @@ class FlightStateMachine {
     static constexpr float apogeeDescentDeltaM = 1.0f;
     static constexpr uint8_t apogeeDescendingSamplesRequired = 3U;
 
-    static constexpr float descentLandedAccelGs = 0.1f;
-    static constexpr uint32_t descentLandedAccelSustainMs = 3000U;
-    static constexpr uint32_t descentLandedAltitudeWindowMs = 5000U;
-    static constexpr float descentLandedAltitudeDeltaM = 1.0f;
+    static constexpr float descentLandedRestAccelGs = 1.0f;
+    static constexpr float descentLandedAccelToleranceGs = 0.2f;
+    static constexpr uint32_t descentLandedAccelSustainMs = 2000U;
+    static constexpr uint32_t descentLandedAltitudeWindowMs = 8000U;
+    static constexpr float descentLandedAltitudeDeltaM = 2.0f;
 
     Barometer &barometer;
     Imu &imu;
